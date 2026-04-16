@@ -1859,6 +1859,33 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Realtime: refresh threads when messages or threads change
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const refresh = async () => {
+      setThreads(await loadThreadsForUser(currentUserId));
+    };
+
+    const channel = supabase
+      .channel("realtime-messaging")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        refresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "threads" },
+        refresh
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+  
   const requireAuth = () => {
     if (currentUserId) return true;
     setSignInGateAction("continue");
