@@ -19,6 +19,8 @@ import {
   signInWithEmail,
   signUpWithEmail,
   signOut as apiSignOut,
+  updateProfile as apiUpdateProfile,
+  resetPassword,
 } from "./lib/storage";
 
 /* =========================================================================
@@ -498,6 +500,7 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   if (!open) return null;
 
@@ -506,6 +509,12 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
     setErr("");
     setLoading(true);
     try {
+      if (mode === "forgot") {
+        await resetPassword(email.trim());
+        setResetSent(true);
+        setLoading(false);
+        return;
+      }
       if (mode === "signup") {
         await signUpWithEmail(email.trim(), password, { name: name.trim(), phone: phone.trim() });
         await signInWithEmail(email.trim(), password);
@@ -514,7 +523,7 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
       }
       onSuccess?.();
       onClose();
-      setEmail(""); setPassword(""); setName(""); setPhone("");
+      setEmail(""); setPassword(""); setName(""); setPhone(""); setResetSent(false);
     } catch (ex) {
       setErr(ex.message || "Something went wrong");
     } finally {
@@ -522,60 +531,95 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
     }
   };
 
+  const title = mode === "signup" ? "Create account" : mode === "forgot" ? "Reset password" : "Sign in";
+
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-md bg-neutral-950 rounded-t-3xl sm:rounded-3xl border border-neutral-800 p-6 pb-10">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">{mode === "signup" ? "Create account" : "Sign in"}</h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-white p-2"><X className="w-5 h-5" /></button>
+          <h2 className="text-2xl font-bold text-white">{title}</h2>
+          <button onClick={() => { onClose(); setResetSent(false); setErr(""); }} className="text-neutral-400 hover:text-white p-2"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={submit} className="space-y-3">
-          {mode === "signup" && (
-            <>
-              <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Name</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-                  className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
-                  placeholder="Your name" required />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-400 mb-1 block">Phone (optional)</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
-                  placeholder="+251 91 234 5678" />
-              </div>
-            </>
-          )}
-          <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
-              placeholder="you@example.com" required autoComplete="email" />
+
+        {mode === "forgot" && resetSent ? (
+          <div className="text-center py-6">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-700/20 border border-emerald-500/40 flex items-center justify-center mb-4">
+              <Send className="w-6 h-6 text-emerald-400" />
+            </div>
+            <h3 className="text-white text-lg font-semibold">Check your email</h3>
+            <p className="text-neutral-400 text-sm mt-2">We sent a password reset link to <strong className="text-white">{email}</strong>. Click the link in the email to set a new password.</p>
+            <button onClick={() => { setMode("signin"); setResetSent(false); setErr(""); }}
+              className="mt-6 w-full h-12 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-white font-semibold border border-neutral-800">
+              Back to sign in
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-neutral-400 mb-1 block">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
-              placeholder="At least 6 characters" required minLength={6}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"} />
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            {mode === "signup" && (
+              <>
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">Name</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                    className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
+                    placeholder="Your name" required />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">Phone (optional)</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
+                    placeholder="+251 91 234 5678" />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="text-xs text-neutral-400 mb-1 block">Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
+                placeholder="you@example.com" required autoComplete="email" />
+            </div>
+            {mode !== "forgot" && (
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
+                  placeholder="At least 6 characters" required minLength={6}
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"} />
+              </div>
+            )}
+            {err && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</div>}
+            <button type="submit" disabled={loading}
+              className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl text-white font-semibold mt-2">
+              {loading ? "Please wait…" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}
+            </button>
+          </form>
+        )}
+
+        {mode !== "forgot" && (
+          <div className="text-center mt-6 text-sm text-neutral-400">
+            {mode === "signup" ? (
+              <>Already have an account?{" "}
+                <button onClick={() => { setMode("signin"); setErr(""); }} className="text-emerald-400 font-semibold">Sign in</button>
+              </>
+            ) : (
+              <>New to Mela Cars?{" "}
+                <button onClick={() => { setMode("signup"); setErr(""); }} className="text-emerald-400 font-semibold">Create account</button>
+              </>
+            )}
           </div>
-          {err && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{err}</div>}
-          <button type="submit" disabled={loading}
-            className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl text-white font-semibold mt-2">
-            {loading ? "Please wait…" : (mode === "signup" ? "Create account" : "Sign in")}
-          </button>
-        </form>
-        <div className="text-center mt-6 text-sm text-neutral-400">
-          {mode === "signup" ? (
-            <>Already have an account?{" "}
-              <button onClick={() => { setMode("signin"); setErr(""); }} className="text-emerald-400 font-semibold">Sign in</button>
-            </>
-          ) : (
-            <>New to Mela Cars?{" "}
-              <button onClick={() => { setMode("signup"); setErr(""); }} className="text-emerald-400 font-semibold">Create account</button>
-            </>
-          )}
-        </div>
+        )}
+        {mode === "signin" && (
+          <div className="text-center mt-3">
+            <button onClick={() => { setMode("forgot"); setErr(""); setResetSent(false); }} className="text-neutral-500 text-sm underline underline-offset-2">
+              Forgot password?
+            </button>
+          </div>
+        )}
+        {mode === "forgot" && !resetSent && (
+          <div className="text-center mt-4 text-sm text-neutral-400">
+            Remember your password?{" "}
+            <button onClick={() => { setMode("signin"); setErr(""); }} className="text-emerald-400 font-semibold">Sign in</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1710,8 +1754,48 @@ const LEGAL_TEXT = {
   disclaimer: "DISCLAIMER\n\nThis platform is a listings service only. We do not own, inspect, or sell any vehicles. All transactions occur directly between buyers and sellers at their own risk.",
 };
 
-function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing }) {
+function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated }) {
   const [legalView, setLegalView] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editBusiness, setEditBusiness] = useState("");
+  const [editTelegram, setEditTelegram] = useState("");
+  const [wantSeller, setWantSeller] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
+  const startEdit = () => {
+    setEditName(currentProfile?.name || "");
+    setEditPhone(currentProfile?.phone || "");
+    setEditBusiness(currentProfile?.business_name || "");
+    setEditTelegram(currentProfile?.telegram || "");
+    setWantSeller(currentProfile?.role === "seller");
+    setEditing(true);
+    setSaveMsg("");
+  };
+
+  const saveProfile = async () => {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      await apiUpdateProfile({
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        businessName: editBusiness.trim() || null,
+        telegram: editTelegram.trim() || null,
+        role: wantSeller ? "seller" : "buyer",
+      });
+      setSaveMsg("Profile updated!");
+      setEditing(false);
+      if (onProfileUpdated) onProfileUpdated();
+    } catch (e) {
+      setSaveMsg("Error: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const Row = ({ icon: Icon, label, onClick }) => (
     <button onClick={onClick} className="w-full flex items-center gap-4 px-5 py-4 border-b border-neutral-900 active:bg-neutral-900">
       <Icon className="w-5 h-5 text-white" />
@@ -1719,18 +1803,79 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
       <ChevronRight className="w-5 h-5 text-neutral-500" />
     </button>
   );
+
+  const inputCls = "w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-4 text-white text-sm outline-none focus:border-emerald-500";
+
   return (
     <div className="pb-28">
       <div className="pt-5 pb-4 text-center text-white text-[17px]">Profile &amp; more</div>
       {currentUserId ? (
-        <div className="mx-4 mb-4 p-4 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-emerald-700/20 border border-emerald-500/40 flex items-center justify-center"><UserCircle2 className="w-7 h-7 text-emerald-400" /></div>
-          <div className="flex-1 min-w-0">
-            <div className="text-white font-semibold truncate">{currentProfile?.business_name || currentProfile?.name || "Account"}</div>
-            <div className="text-neutral-400 text-xs truncate">{currentProfile?.email} · {currentProfile?.role === "seller" ? "Seller" : "Buyer"}</div>
+        <>
+          <div className="mx-4 mb-4 p-4 rounded-2xl bg-neutral-900 border border-neutral-800">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-700/20 border border-emerald-500/40 flex items-center justify-center">
+                <UserCircle2 className="w-7 h-7 text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-semibold truncate">{currentProfile?.business_name || currentProfile?.name || "Account"}</div>
+                <div className="text-neutral-400 text-xs truncate">{currentProfile?.email} · {currentProfile?.role === "seller" ? "Seller" : "Buyer"}</div>
+                {currentProfile?.phone && <div className="text-neutral-500 text-xs truncate mt-0.5">{currentProfile.phone}</div>}
+                {currentProfile?.telegram && <div className="text-neutral-500 text-xs truncate">Telegram: {currentProfile.telegram}</div>}
+              </div>
+              <button onClick={onSignOut} className="w-9 h-9 rounded-full border border-neutral-700 flex items-center justify-center">
+                <LogOut className="w-4 h-4 text-neutral-300" />
+              </button>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={startEdit} className="flex-1 h-10 rounded-xl bg-emerald-700 text-white text-sm font-medium">
+                Edit profile
+              </button>
+            </div>
+            {saveMsg && (
+              <div className={`mt-2 text-sm px-3 py-2 rounded-lg ${saveMsg.startsWith("Error") ? "text-red-400 bg-red-500/10" : "text-emerald-400 bg-emerald-500/10"}`}>
+                {saveMsg}
+              </div>
+            )}
           </div>
-          <button onClick={onSignOut} className="w-9 h-9 rounded-full border border-neutral-700 flex items-center justify-center"><LogOut className="w-4 h-4 text-neutral-300" /></button>
-        </div>
+
+          {editing && (
+            <div className="mx-4 mb-4 p-4 rounded-2xl bg-neutral-900 border border-emerald-500/30 space-y-3">
+              <h3 className="text-white font-semibold text-[15px]">Edit your profile</h3>
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Name</label>
+                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className={inputCls} placeholder="Your name" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Phone</label>
+                <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className={inputCls} placeholder="+251 91 234 5678" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Telegram username</label>
+                <input type="text" value={editTelegram} onChange={(e) => setEditTelegram(e.target.value)} className={inputCls} placeholder="@yourname" />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Business name (for dealers)</label>
+                <input type="text" value={editBusiness} onChange={(e) => setEditBusiness(e.target.value)} className={inputCls} placeholder="Optional — shown on listings" />
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800">
+                <div>
+                  <div className="text-white text-sm font-medium">I'm a seller / dealer</div>
+                  <div className="text-neutral-500 text-xs mt-0.5">Enable to post listings as a dealer</div>
+                </div>
+                <button type="button" onClick={() => setWantSeller(!wantSeller)}
+                  className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${wantSeller ? "bg-emerald-600" : "bg-neutral-700"}`}>
+                  <div className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform ${wantSeller ? "translate-x-5" : ""}`} />
+                </button>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setEditing(false)} className="flex-1 h-11 rounded-xl border border-neutral-700 text-neutral-300 text-sm font-medium">Cancel</button>
+                <button onClick={saveProfile} disabled={saving} className="flex-1 h-11 rounded-xl bg-emerald-700 text-white text-sm font-medium disabled:opacity-50">
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <Row icon={UserCircle2} label="Sign in / Register" onClick={onSignIn} />
       )}
@@ -1767,10 +1912,6 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
     </div>
   );
 }
-
-/* =========================================================================
-   BOTTOM NAV
-   ========================================================================= */
 
 function BottomNav({ tab, setTab, unreadCount }) {
   const items = [
@@ -2093,11 +2234,12 @@ export default function App() {
           <ThreadScreen thread={activeThread} currentUserId={currentUserId}
             listing={activeThreadListing} onBack={() => setView("messages")} onSend={sendMessage} />
         )}
-        {view === "more" && (
-          <MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
-            onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
-            onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail} />
-        )}
+{view === "more" && (
+  <MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
+    onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
+    onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
+    onProfileUpdated={async () => { setCurrentProfile(await getCurrentProfile()); }} />
+)}
 
         <AuthModal open={authModalOpen} mode={authMode} setMode={setAuthMode}
           onClose={() => setAuthModalOpen(false)} onSuccess={() => {}} />

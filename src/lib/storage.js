@@ -233,3 +233,23 @@ function listingToRow(l, sellerId) {
     status: l.status ?? 'active',
   };
 }
+export async function updateProfile(updates) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Not signed in");
+  const snakeUpdates = {};
+  if (updates.name !== undefined) snakeUpdates.name = updates.name;
+  if (updates.phone !== undefined) snakeUpdates.phone = updates.phone;
+  if (updates.businessName !== undefined) snakeUpdates.business_name = updates.businessName;
+  if (updates.role !== undefined) snakeUpdates.role = updates.role;
+  if (updates.telegram !== undefined) snakeUpdates.telegram = updates.telegram;
+  snakeUpdates.updated_at = new Date().toISOString();
+  const { error } = await supabase.from("profiles").update(snakeUpdates).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function resetPassword(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw error;
+}
