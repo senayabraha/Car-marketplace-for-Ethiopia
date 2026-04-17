@@ -267,7 +267,12 @@ const MODELS_BY_MAKE = {
 };
 
 let POPULAR_MAKES = Object.keys(MODELS_BY_MAKE).sort();
-
+const TRIMS_BY_MODEL = {
+  "BMW|3-Series": ["316i","320i","325i","328i","330i","335i","340i","M340i"],
+  "Ford|F-150": ["XL","XLT","Lariat","King Ranch","Platinum","Limited","Raptor"],
+  "Toyota|Camry": ["L","LE","SE","XLE","XSE","TRD","Hybrid LE","Hybrid SE","Hybrid XLE"],
+};
+const BODY_STYLES = ["Sedan","SUV / Crossover","Hatchback","Convertible","Van","Minivan","Pickup Truck","Coupe","Wagon"];
 
 /* =========================================================================
    COUNTRY / LOCATION DATA
