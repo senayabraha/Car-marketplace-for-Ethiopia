@@ -181,6 +181,8 @@ function rowToListing(r) {
     photos,
     photoUrl: photos[0] || null, // first photo as main
     financingAvailable: r.financing_available,
+    negotiable: r.negotiable || false,
+    exchangeAccepted: r.exchange_accepted || false,
     condition: r.condition,
     status: r.status,
     createdAt: new Date(r.created_at).getTime(),
@@ -229,6 +231,8 @@ function listingToRow(l, sellerId) {
     features: l.features ?? [],
     photos,
     financing_available: l.financingAvailable ?? false,
+    negotiable: l.negotiable || false,
+    exchange_accepted: l.exchangeAccepted || false,
     condition: l.condition ?? 'used',
     status: l.status ?? 'active',
   };

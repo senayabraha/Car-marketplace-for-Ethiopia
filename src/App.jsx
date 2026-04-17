@@ -1311,13 +1311,30 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
           </a>
         )}
         <div className="flex items-end justify-between mt-4">
-          {listing.financingAvailable ? (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-900/40 border border-emerald-800">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-sm text-emerald-300 font-medium">Financing available</span>
-            </div>
-          ) : <div />}
-          <div className="text-right"><div className="text-3xl font-bold text-white">{formatMoney(listing.price, listing.currency)}</div></div>
+<div className="flex flex-wrap gap-2">
+  {listing.financingAvailable && (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-900/40 border border-emerald-800">
+      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+      <span className="text-xs text-emerald-300 font-medium">Financing</span>
+    </div>
+  )}
+  {listing.negotiable && (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-900/40 border border-amber-800">
+      <span className="text-xs text-amber-300 font-medium">Negotiable</span>
+    </div>
+  )}
+  {listing.exchangeAccepted && (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-900/40 border border-blue-800">
+      <span className="text-xs text-blue-300 font-medium">Exchange accepted</span>
+    </div>
+  )}
+  {listing.condition === "new" && (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-900/40 border border-purple-800">
+      <span className="text-xs text-purple-300 font-medium">Brand new</span>
+    </div>
+  )}
+</div>          
+<div className="text-right"><div className="text-3xl font-bold text-white">{formatMoney(listing.price, listing.currency)}</div></div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Mileage</div><div className="text-white font-medium mt-0.5">{listing.mileage.toLocaleString()} km</div></div>
@@ -1410,9 +1427,11 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
 function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
   if (!currentUserId) return <AuthGate message="Sign in to post a vehicle for sale." onSignIn={onSignIn} />;
 
+  const [step, setStep] = useState(1);
+  const totalSteps = 4;
   const [form, setForm] = useState({
     year: "", make: "", model: "", trim: "",
-    mileage: "", price: "",
+    mileage: "", price: "", condition: "used",
     country: "Ethiopia", region: "", city: "", area: "", landmark: "",
     gpsLat: null, gpsLng: null,
     plateCode: "", dutyStatus: "Duty paid",
@@ -1421,6 +1440,7 @@ function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
     exteriorColor: "", interiorColor: "",
     seats: "", doors: "", mpg: "",
     description: "", financingAvailable: false,
+    negotiable: true, exchangeAccepted: false,
     features: [], photos: [],
   });
   const [err, setErr] = useState("");
@@ -1452,7 +1472,17 @@ function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
     set("features", has ? form.features.filter(x => x !== f) : [...form.features, f]);
   };
 
+  const canGoNext = () => {
+    if (step === 1) {
+      if (form.photos.length === 0) { setErr("At least 1 photo is required."); return false; }
+      if (!form.year || !form.make || !form.model || !form.price) { setErr("Year, make, model, and price are required."); return false; }
+    }
+    setErr("");
+    return true;
+  };
+
   const submit = async () => {
+    if (form.photos.length === 0) { setErr("At least 1 photo is required."); return; }
     if (!form.year || !form.make || !form.model || !form.price) { setErr("Year, make, model, and price are required."); return; }
     setErr(""); setPosting(true);
     const locationStr = form.area ? `${form.area}, ${form.city || ""}` : (form.city || form.region || form.country);
@@ -1490,12 +1520,13 @@ function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
         features: form.features,
         photos: form.photos,
         financingAvailable: !!form.financingAvailable,
-        condition: "used",
+        negotiable: !!form.negotiable,
+        exchangeAccepted: !!form.exchangeAccepted,
+        condition: form.condition,
         status: "active",
       });
     } catch (e) {
       setErr(e.message);
-    } finally {
       setPosting(false);
     }
   };
@@ -1503,182 +1534,290 @@ function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
   const inputCls = "mt-1.5 w-full h-12 rounded-xl bg-neutral-900 border border-neutral-800 px-4 text-white text-sm outline-none focus:border-emerald-500";
   const selectCls = inputCls;
   const chipCls = (on) => `px-3 h-9 rounded-full border text-sm ${on ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-neutral-700 text-neutral-200"}`;
+  const toggleBtn = (on, onToggle, label, sub) => (
+    <div className="flex items-center justify-between p-4 rounded-xl bg-neutral-900 border border-neutral-800">
+      <div className="flex-1 pr-4">
+        <div className="text-white font-medium text-sm">{label}</div>
+        {sub && <div className="text-neutral-500 text-xs mt-0.5">{sub}</div>}
+      </div>
+      <button type="button" onClick={onToggle}
+        className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${on ? "bg-emerald-600" : "bg-neutral-700"}`}>
+        <div className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform ${on ? "translate-x-5" : ""}`} />
+      </button>
+    </div>
+  );
+
+  const progress = (step / totalSteps) * 100;
 
   return (
     <div className="pb-32">
-      <div className="px-5 pt-5 pb-3">
+      <div className="px-5 pt-5 pb-2">
         <h1 className="text-white text-2xl font-bold">Sell your car</h1>
-        <p className="text-neutral-400 text-sm mt-1">Post a listing — buyers can message you directly.</p>
+        <p className="text-neutral-400 text-sm mt-1">Step {step} of {totalSteps}</p>
+        <div className="mt-3 h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+          <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
       </div>
-      <div className="px-5 space-y-4">
-        <div>
-          <div className="text-sm text-white font-semibold mb-2">Photos</div>
-          <div className="grid grid-cols-3 gap-2">
-            {form.photos.map((p, i) => (
-              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-800">
-                <img src={p} alt="" className="w-full h-full object-cover" />
-                {i === 0 && <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-semibold">Main</div>}
-                <button onClick={() => removePhoto(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white" /></button>
+
+      <div className="px-5 mt-4 space-y-4">
+
+        {/* ===== STEP 1: Photos + Basic Info ===== */}
+        {step === 1 && (
+          <>
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Camera className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Photos</h3>
+                <span className="text-red-400 text-xs">* Required (at least 1)</span>
               </div>
-            ))}
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="aspect-square rounded-xl border-2 border-dashed border-neutral-700 flex flex-col items-center justify-center text-neutral-400 active:bg-neutral-900 disabled:opacity-50">
-              <Camera className="w-6 h-6" />
-              <span className="text-[11px] mt-1">{uploading ? "Uploading…" : "Add photos"}</span>
-            </button>
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
-          <p className="text-xs text-neutral-500 mt-2">First photo is the main photo shown on the listing card.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Year *</span><input type="number" value={form.year} onChange={(e) => set("year", e.target.value)} placeholder="2022" className={inputCls} /></label>
-          <label className="block"><span className="text-xs text-neutral-400">Make *</span>
-            <select value={form.make} onChange={(e) => set("make", e.target.value)} className={selectCls}>
-              <option value="">Select make</option>
-              {POPULAR_MAKES.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Model *</span>
-            {form.make && MODELS_BY_MAKE[form.make] ? (
-              <select value={form.model} onChange={(e) => set("model", e.target.value)} className={selectCls}>
-                <option value="">Select model</option>
-                {MODELS_BY_MAKE[form.make].map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            ) : <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Accord" className={inputCls} />}
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Trim</span><input value={form.trim} onChange={(e) => set("trim", e.target.value)} placeholder="EX-L" className={inputCls} /></label>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Mileage (km)</span><input type="number" value={form.mileage} onChange={(e) => set("mileage", e.target.value)} placeholder="65000" className={inputCls} /></label>
-          <label className="block"><span className="text-xs text-neutral-400">Price ({CURRENCY_BY_COUNTRY[form.country] || "ETB"}) *</span><input type="number" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="2500000" className={inputCls} /></label>
-        </div>
-        <div className="pt-2 border-t border-neutral-900"><h3 className="text-white font-semibold">Location</h3></div>
-        <label className="block"><span className="text-xs text-neutral-400">Country *</span>
-          <select value={form.country} onChange={(e) => setForm(p => ({ ...p, country: e.target.value, region: "", city: "", area: "", plateCode: "" }))} className={selectCls}>
-            {COUNTRY_LIST.map(c => <option key={c} value={c}>{(COUNTRIES_DATA[c]?.flag || "")} {c}</option>)}
-          </select>
-        </label>
-        <label className="block"><span className="text-xs text-neutral-400">Region / Province *</span>
-          <select value={form.region} onChange={(e) => setForm(p => ({ ...p, region: e.target.value, city: "", area: "" }))} className={selectCls}>
-            <option value="">Select region</option>
-            {regionsOf(form.country).map(r => <option key={r}>{r}</option>)}
-          </select>
-        </label>
-        {form.region && citiesOf(form.country, form.region).length > 0 && (
-          <label className="block"><span className="text-xs text-neutral-400">City / Town *</span>
-            <select value={form.city} onChange={(e) => setForm(p => ({ ...p, city: e.target.value, area: "" }))} className={selectCls}>
-              <option value="">Select city</option>
-              {citiesOf(form.country, form.region).map(c => <option key={c}>{c}</option>)}
-            </select>
-          </label>
-        )}
-        {form.city && areasOf(form.country, form.city).length > 0 && (
-          <label className="block"><span className="text-xs text-neutral-400">Area / Neighborhood</span>
-            <select value={form.area} onChange={(e) => set("area", e.target.value)} className={selectCls}>
-              <option value="">Select area</option>
-              {areasOf(form.country, form.city).map(a => <option key={a}>{a}</option>)}
-            </select>
-          </label>
-        )}
-        <label className="block"><span className="text-xs text-neutral-400">Landmark (helps buyers find you)</span><input value={form.landmark} onChange={(e) => set("landmark", e.target.value)} placeholder="e.g. Near Bole Medhanealem Church" className={inputCls} /></label>
-        <div>
-          <div className="text-xs text-neutral-400 mb-1.5">GPS pin (optional)</div>
-          {form.gpsLat != null ? (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-12 rounded-xl bg-neutral-900 border border-neutral-800 px-4 flex items-center text-white text-sm">
-                <MapPin className="w-4 h-4 text-emerald-400 mr-2" />
-                {form.gpsLat.toFixed(5)}, {form.gpsLng.toFixed(5)}
+              <div className="grid grid-cols-3 gap-2">
+                {form.photos.map((p, i) => (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-800">
+                    <img src={p} alt="" className="w-full h-full object-cover" />
+                    {i === 0 && <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-semibold">Main</div>}
+                    <button onClick={() => removePhoto(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white" /></button>
+                  </div>
+                ))}
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="aspect-square rounded-xl border-2 border-dashed border-neutral-700 flex flex-col items-center justify-center text-neutral-400 active:bg-neutral-900 disabled:opacity-50">
+                  <Camera className="w-6 h-6" />
+                  <span className="text-[11px] mt-1">{uploading ? "Uploading…" : "Add photos"}</span>
+                </button>
               </div>
-              <button type="button" onClick={() => setForm(p => ({ ...p, gpsLat: null, gpsLng: null }))} className="h-12 px-4 rounded-xl border border-neutral-700 text-neutral-300 text-sm">Clear</button>
+              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
+              <p className="text-xs text-neutral-500 mt-2">First photo is the main photo shown on the listing card.</p>
             </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Car className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Vehicle details</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Year *</span><input type="number" value={form.year} onChange={(e) => set("year", e.target.value)} placeholder="2022" className={inputCls} /></label>
+                  <label className="block"><span className="text-xs text-neutral-400">Make *</span>
+                    <select value={form.make} onChange={(e) => { set("make", e.target.value); set("model", ""); }} className={selectCls}>
+                      <option value="">Select make</option>
+                      {POPULAR_MAKES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Model *</span>
+                    {form.make && MODELS_BY_MAKE[form.make] ? (
+                      <select value={form.model} onChange={(e) => set("model", e.target.value)} className={selectCls}>
+                        <option value="">Select model</option>
+                        {MODELS_BY_MAKE[form.make].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    ) : <input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Accord" className={inputCls} />}
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Trim</span><input value={form.trim} onChange={(e) => set("trim", e.target.value)} placeholder="EX-L" className={inputCls} /></label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Condition *</span>
+                    <select value={form.condition} onChange={(e) => set("condition", e.target.value)} className={selectCls}>
+                      <option value="used">Used</option>
+                      <option value="new">New</option>
+                    </select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Mileage (km)</span><input type="number" value={form.mileage} onChange={(e) => set("mileage", e.target.value)} placeholder="65000" className={inputCls} /></label>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Tag className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Pricing</h3>
+              </div>
+              <div className="space-y-3">
+                <label className="block"><span className="text-xs text-neutral-400">Price ({CURRENCY_BY_COUNTRY[form.country] || "ETB"}) *</span><input type="number" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="2500000" className={inputCls} /></label>
+                {toggleBtn(form.negotiable, () => set("negotiable", !form.negotiable), "Price is negotiable", "Buyers will see a 'Negotiable' badge")}
+                {toggleBtn(form.exchangeAccepted, () => set("exchangeAccepted", !form.exchangeAccepted), "Exchange / trade-in accepted", "You're open to swapping vehicles")}
+                {toggleBtn(form.financingAvailable, () => set("financingAvailable", !form.financingAvailable), "Financing available", "You offer payment plans")}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ===== STEP 2: Location ===== */}
+        {step === 2 && (
+          <>
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <MapPin className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Location</h3>
+              </div>
+              <div className="space-y-3">
+                <label className="block"><span className="text-xs text-neutral-400">Country *</span>
+                  <select value={form.country} onChange={(e) => setForm(p => ({ ...p, country: e.target.value, region: "", city: "", area: "", plateCode: "" }))} className={selectCls}>
+                    {COUNTRY_LIST.map(c => <option key={c} value={c}>{(COUNTRIES_DATA[c]?.flag || "")} {c}</option>)}
+                  </select>
+                </label>
+                <label className="block"><span className="text-xs text-neutral-400">Region / Province *</span>
+                  <select value={form.region} onChange={(e) => setForm(p => ({ ...p, region: e.target.value, city: "", area: "" }))} className={selectCls}>
+                    <option value="">Select region</option>
+                    {regionsOf(form.country).map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </label>
+                {form.region && citiesOf(form.country, form.region).length > 0 && (
+                  <label className="block"><span className="text-xs text-neutral-400">City / Town *</span>
+                    <select value={form.city} onChange={(e) => setForm(p => ({ ...p, city: e.target.value, area: "" }))} className={selectCls}>
+                      <option value="">Select city</option>
+                      {citiesOf(form.country, form.region).map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </label>
+                )}
+                {form.city && areasOf(form.country, form.city).length > 0 && (
+                  <label className="block"><span className="text-xs text-neutral-400">Area / Neighborhood</span>
+                    <select value={form.area} onChange={(e) => set("area", e.target.value)} className={selectCls}>
+                      <option value="">Select area</option>
+                      {areasOf(form.country, form.city).map(a => <option key={a}>{a}</option>)}
+                    </select>
+                  </label>
+                )}
+                <label className="block"><span className="text-xs text-neutral-400">Landmark (helps buyers find you)</span><input value={form.landmark} onChange={(e) => set("landmark", e.target.value)} placeholder="e.g. Near Bole Medhanealem Church" className={inputCls} /></label>
+                <div>
+                  <div className="text-xs text-neutral-400 mb-1.5">GPS pin (optional)</div>
+                  {form.gpsLat != null ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-12 rounded-xl bg-neutral-900 border border-neutral-800 px-4 flex items-center text-white text-sm">
+                        <MapPin className="w-4 h-4 text-emerald-400 mr-2" />{form.gpsLat.toFixed(5)}, {form.gpsLng.toFixed(5)}
+                      </div>
+                      <button type="button" onClick={() => setForm(p => ({ ...p, gpsLat: null, gpsLng: null }))} className="h-12 px-4 rounded-xl border border-neutral-700 text-neutral-300 text-sm">Clear</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => {
+                      if (!navigator.geolocation) { alert("Geolocation is not supported."); return; }
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => setForm(p => ({ ...p, gpsLat: pos.coords.latitude, gpsLng: pos.coords.longitude })),
+                        () => alert("Could not get your location.")
+                      );
+                    }} className="w-full h-12 rounded-xl border border-dashed border-neutral-700 text-neutral-300 text-sm flex items-center justify-center gap-2">
+                      <MapPin className="w-4 h-4" /> Use current location
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Vehicle status</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="text-xs text-neutral-400">Duty status</span>
+                  <select value={form.dutyStatus} onChange={(e) => set("dutyStatus", e.target.value)} className={selectCls}>{DUTY_STATUS.map(d => <option key={d}>{d}</option>)}</select>
+                </label>
+                <label className="block"><span className="text-xs text-neutral-400">Plate code</span>
+                  <select value={form.plateCode} onChange={(e) => set("plateCode", e.target.value)} className={selectCls}>
+                    <option value="">Select</option>{platesOf(form.country).map(p => <option key={p.code} value={p.code}>{p.code} · {p.region}</option>)}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ===== STEP 3: Specifications ===== */}
+        {step === 3 && (
+          <>
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <SlidersHorizontal className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Specifications</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Body style</span>
+                    <select value={form.bodyStyle} onChange={(e) => set("bodyStyle", e.target.value)} className={selectCls}>{BODY_STYLES.map(b => <option key={b}>{b}</option>)}</select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Fuel type</span>
+                    <select value={form.fuelType} onChange={(e) => set("fuelType", e.target.value)} className={selectCls}>{FUEL_TYPES.map(f => <option key={f}>{f}</option>)}</select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Drivetrain</span>
+                    <select value={form.drivetrain} onChange={(e) => set("drivetrain", e.target.value)} className={selectCls}>{DRIVETRAINS.map(d => <option key={d}>{d}</option>)}</select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Transmission</span>
+                    <select value={form.transmission} onChange={(e) => set("transmission", e.target.value)} className={selectCls}>{TRANSMISSIONS.map(t => <option key={t}>{t}</option>)}</select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Engine</span><input value={form.engine} onChange={(e) => set("engine", e.target.value)} placeholder="2.0L Turbo I4" className={inputCls} /></label>
+                  <label className="block"><span className="text-xs text-neutral-400">Horsepower</span><input type="number" value={form.power} onChange={(e) => set("power", e.target.value)} placeholder="255" className={inputCls} /></label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Exterior color</span>
+                    <select value={form.exteriorColor} onChange={(e) => set("exteriorColor", e.target.value)} className={selectCls}><option value="">Select</option>{EXTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Interior color</span>
+                    <select value={form.interiorColor} onChange={(e) => set("interiorColor", e.target.value)} className={selectCls}><option value="">Select</option>{INTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <label className="block"><span className="text-xs text-neutral-400">Seats</span>
+                    <select value={form.seats} onChange={(e) => set("seats", e.target.value)} className={selectCls}><option value="">—</option>{SEAT_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">Doors</span>
+                    <select value={form.doors} onChange={(e) => set("doors", e.target.value)} className={selectCls}><option value="">—</option>{DOOR_OPTIONS.map(d => <option key={d}>{d}</option>)}</select>
+                  </label>
+                  <label className="block"><span className="text-xs text-neutral-400">MPG</span><input type="number" value={form.mpg} onChange={(e) => set("mpg", e.target.value)} placeholder="32" className={inputCls} /></label>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ===== STEP 4: Features + Description ===== */}
+        {step === 4 && (
+          <>
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Tag className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Features</h3>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {FEATURE_LIST.map(f => <button key={f} onClick={() => toggleFeature(f)} className={chipCls(form.features.includes(f))}>{f}</button>)}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold text-[15px]">Description</h3>
+              </div>
+              <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={5}
+                placeholder="Tell buyers about your car — condition, history, reason for selling, any extras included..."
+                className="w-full rounded-xl bg-neutral-900 border border-neutral-800 p-4 text-white text-sm outline-none focus:border-emerald-500 resize-none" />
+            </div>
+          </>
+        )}
+
+        {/* Error */}
+        {err && <div className="p-3 rounded-xl bg-red-900/30 border border-red-900 text-red-300 text-sm">{err}</div>}
+
+        {/* Navigation */}
+        <div className="flex gap-3 pt-2">
+          {step > 1 && (
+            <button onClick={() => { setStep(step - 1); setErr(""); }} className="flex-1 h-14 rounded-full border border-neutral-700 text-white font-medium">
+              Back
+            </button>
+          )}
+          {step < totalSteps ? (
+            <button onClick={() => { if (canGoNext()) setStep(step + 1); }} className="flex-1 h-14 rounded-full bg-emerald-700 text-white font-semibold">
+              Next
+            </button>
           ) : (
-            <button type="button" onClick={() => {
-              if (!navigator.geolocation) { alert("Geolocation is not supported on this device."); return; }
-              navigator.geolocation.getCurrentPosition(
-                (pos) => setForm(p => ({ ...p, gpsLat: pos.coords.latitude, gpsLng: pos.coords.longitude })),
-                () => alert("Could not get your location.")
-              );
-            }} className="w-full h-12 rounded-xl border border-dashed border-neutral-700 text-neutral-300 text-sm flex items-center justify-center gap-2">
-              <MapPin className="w-4 h-4" /> Use current location
+            <button onClick={submit} disabled={posting} className="flex-1 h-14 rounded-full bg-emerald-700 text-white font-semibold disabled:opacity-50">
+              {posting ? "Posting…" : "Post listing"}
             </button>
           )}
         </div>
-        <div className="pt-2 border-t border-neutral-900"><h3 className="text-white font-semibold">Specifications</h3></div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Body style</span>
-            <select value={form.bodyStyle} onChange={(e) => set("bodyStyle", e.target.value)} className={selectCls}>{BODY_STYLES.map(b => <option key={b}>{b}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Fuel type</span>
-            <select value={form.fuelType} onChange={(e) => set("fuelType", e.target.value)} className={selectCls}>{FUEL_TYPES.map(f => <option key={f}>{f}</option>)}</select>
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Drivetrain</span>
-            <select value={form.drivetrain} onChange={(e) => set("drivetrain", e.target.value)} className={selectCls}>{DRIVETRAINS.map(d => <option key={d}>{d}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Transmission</span>
-            <select value={form.transmission} onChange={(e) => set("transmission", e.target.value)} className={selectCls}>{TRANSMISSIONS.map(t => <option key={t}>{t}</option>)}</select>
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Engine</span><input value={form.engine} onChange={(e) => set("engine", e.target.value)} placeholder="2.0L Turbo I4" className={inputCls} /></label>
-          <label className="block"><span className="text-xs text-neutral-400">Horsepower</span><input type="number" value={form.power} onChange={(e) => set("power", e.target.value)} placeholder="255" className={inputCls} /></label>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Exterior color</span>
-            <select value={form.exteriorColor} onChange={(e) => set("exteriorColor", e.target.value)} className={selectCls}><option value="">Select</option>{EXTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Interior color</span>
-            <select value={form.interiorColor} onChange={(e) => set("interiorColor", e.target.value)} className={selectCls}><option value="">Select</option>{INTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select>
-          </label>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Seats</span>
-            <select value={form.seats} onChange={(e) => set("seats", e.target.value)} className={selectCls}><option value="">—</option>{SEAT_OPTIONS.map(s => <option key={s}>{s}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Doors</span>
-            <select value={form.doors} onChange={(e) => set("doors", e.target.value)} className={selectCls}><option value="">—</option>{DOOR_OPTIONS.map(d => <option key={d}>{d}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">MPG</span><input type="number" value={form.mpg} onChange={(e) => set("mpg", e.target.value)} placeholder="32" className={inputCls} /></label>
-        </div>
-        <div className="pt-2 border-t border-neutral-900">
-          <h3 className="text-white font-semibold mb-2">Features</h3>
-          <div className="flex gap-2 flex-wrap">
-            {FEATURE_LIST.map(f => <button key={f} onClick={() => toggleFeature(f)} className={chipCls(form.features.includes(f))}>{f}</button>)}
-          </div>
-        </div>
-        <div className="pt-2 border-t border-neutral-900"><h3 className="text-white font-semibold">Vehicle status</h3></div>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="text-xs text-neutral-400">Duty status</span>
-            <select value={form.dutyStatus} onChange={(e) => set("dutyStatus", e.target.value)} className={selectCls}>{DUTY_STATUS.map(d => <option key={d}>{d}</option>)}</select>
-          </label>
-          <label className="block"><span className="text-xs text-neutral-400">Plate code</span>
-            <select value={form.plateCode} onChange={(e) => set("plateCode", e.target.value)} className={selectCls}>
-              <option value="">Select</option>{platesOf(form.country).map(p => <option key={p.code} value={p.code}>{p.code} · {p.region}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="flex items-center justify-between p-4 rounded-xl bg-neutral-900 border border-neutral-800 mt-2">
-          <div className="flex-1 pr-4">
-            <div className="text-white font-medium text-sm">Financing available</div>
-            <div className="text-neutral-500 text-xs mt-0.5">Enable if you offer payment plans</div>
-          </div>
-          <button type="button" onClick={() => set("financingAvailable", !form.financingAvailable)}
-            className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${form.financingAvailable ? "bg-emerald-600" : "bg-neutral-700"}`}>
-            <div className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform ${form.financingAvailable ? "translate-x-5" : ""}`} />
-          </button>
-        </div>
-        <label className="block"><span className="text-xs text-neutral-400">Description</span>
-          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={4}
-            placeholder="Tell buyers about your car..."
-            className="mt-1.5 w-full rounded-xl bg-neutral-900 border border-neutral-800 p-4 text-white text-sm outline-none focus:border-emerald-500 resize-none" />
-        </label>
-        {err && <div className="p-3 rounded-xl bg-red-900/30 border border-red-900 text-red-300 text-sm">{err}</div>}
-        <button onClick={submit} disabled={posting} className="w-full h-14 rounded-full bg-emerald-700 text-white font-semibold mt-2 disabled:opacity-50">
-          {posting ? "Posting…" : "Post listing"}
-        </button>
-        <p className="text-center text-xs text-neutral-500">Posted as {currentProfile?.business_name || currentProfile?.name || "you"}.</p>
+
+        <p className="text-center text-xs text-neutral-500 pb-4">Posted as {currentProfile?.business_name || currentProfile?.name || "you"}.</p>
       </div>
     </div>
   );
