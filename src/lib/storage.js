@@ -333,3 +333,45 @@ export async function adminUpdateReport(reportId, updates) {
   const { error } = await supabase.from("reports").update(updates).eq("id", reportId);
   if (error) throw error;
 }
+export async function updateListing(id, updates) {
+  const snakeUpdates = {};
+  if (updates.year !== undefined) snakeUpdates.year = updates.year;
+  if (updates.make !== undefined) snakeUpdates.make = updates.make;
+  if (updates.model !== undefined) snakeUpdates.model = updates.model;
+  if (updates.trim !== undefined) snakeUpdates.trim = updates.trim;
+  if (updates.price !== undefined) snakeUpdates.price = updates.price;
+  if (updates.currency !== undefined) snakeUpdates.currency = updates.currency;
+  if (updates.mileage !== undefined) snakeUpdates.mileage = updates.mileage;
+  if (updates.bodyStyle !== undefined) snakeUpdates.body_style = updates.bodyStyle;
+  if (updates.fuelType !== undefined) snakeUpdates.fuel_type = updates.fuelType;
+  if (updates.drivetrain !== undefined) snakeUpdates.drivetrain = updates.drivetrain;
+  if (updates.transmission !== undefined) snakeUpdates.transmission = updates.transmission;
+  if (updates.engine !== undefined) snakeUpdates.engine = updates.engine;
+  if (updates.power !== undefined) snakeUpdates.power = updates.power;
+  if (updates.exteriorColor !== undefined) snakeUpdates.exterior_color = updates.exteriorColor;
+  if (updates.interiorColor !== undefined) snakeUpdates.interior_color = updates.interiorColor;
+  if (updates.seats !== undefined) snakeUpdates.seats = updates.seats;
+  if (updates.doors !== undefined) snakeUpdates.doors = updates.doors;
+  if (updates.mpg !== undefined) snakeUpdates.mpg = updates.mpg;
+  if (updates.country !== undefined) snakeUpdates.country = updates.country;
+  if (updates.region !== undefined) snakeUpdates.region = updates.region;
+  if (updates.city !== undefined) snakeUpdates.city = updates.city;
+  if (updates.area !== undefined) snakeUpdates.area = updates.area;
+  if (updates.location !== undefined) snakeUpdates.location = updates.location;
+  if (updates.landmark !== undefined) snakeUpdates.landmark = updates.landmark;
+  if (updates.gpsLat !== undefined) snakeUpdates.gps_lat = updates.gpsLat;
+  if (updates.gpsLng !== undefined) snakeUpdates.gps_lng = updates.gpsLng;
+  if (updates.plateCode !== undefined) snakeUpdates.plate_code = updates.plateCode;
+  if (updates.dutyStatus !== undefined) snakeUpdates.duty_status = updates.dutyStatus;
+  if (updates.description !== undefined) snakeUpdates.description = updates.description;
+  if (updates.features !== undefined) snakeUpdates.features = updates.features;
+  if (updates.photos !== undefined) snakeUpdates.photos = updates.photos;
+  if (updates.financingAvailable !== undefined) snakeUpdates.financing_available = updates.financingAvailable;
+  if (updates.negotiable !== undefined) snakeUpdates.negotiable = updates.negotiable;
+  if (updates.exchangeAccepted !== undefined) snakeUpdates.exchange_accepted = updates.exchangeAccepted;
+  if (updates.condition !== undefined) snakeUpdates.condition = updates.condition;
+  if (updates.status !== undefined) snakeUpdates.status = updates.status;
+  snakeUpdates.updated_at = new Date().toISOString();
+  const { error } = await supabase.from("listings").update(snakeUpdates).eq("id", id);
+  if (error) throw error;
+}

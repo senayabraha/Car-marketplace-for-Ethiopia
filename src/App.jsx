@@ -1270,35 +1270,255 @@ function FiltersScreen({ filters, setFilters, onClose, onReset, resultCount, act
    SCREEN: DETAIL
    ========================================================================= */
 
-function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessageSeller, currentUserId, requireAuth }) {
+function EditListingScreen({ listing, onSave, onCancel }) {
+  const [form, setForm] = useState({
+    year: String(listing.year || ""), make: listing.make || "", model: listing.model || "", trim: listing.trim || "",
+    mileage: String(listing.mileage || ""), price: String(listing.price || ""), condition: listing.condition || "used",
+    country: listing.country || "Ethiopia", region: listing.region || "", city: listing.city || "", area: listing.area || "",
+    landmark: listing.landmark || "", gpsLat: listing.gpsLat, gpsLng: listing.gpsLng,
+    plateCode: listing.plateCode || "", dutyStatus: listing.dutyStatus || "Duty paid",
+    bodyStyle: listing.bodyStyle || "Sedan", fuelType: listing.fuelType || "Gasoline",
+    drivetrain: listing.drivetrain || "FWD", transmission: listing.transmission || "Automatic",
+    engine: listing.engine || "", power: String(listing.power || ""),
+    exteriorColor: listing.exteriorColor || "", interiorColor: listing.interiorColor || "",
+    seats: listing.seats || "", doors: listing.doors || "", mpg: String(listing.mpg || ""),
+    description: listing.description || "", financingAvailable: !!listing.financingAvailable,
+    negotiable: listing.negotiable !== false, exchangeAccepted: !!listing.exchangeAccepted,
+    features: listing.features || [], photos: listing.photos || [],
+  });
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const onFiles = async (files) => {
+    const arr = Array.from(files || []);
+    if (arr.length === 0) return;
+    setUploading(true);
+    try {
+      const urls = [];
+      for (const file of arr) { urls.push(await uploadPhoto(file)); }
+      setForm(p => ({ ...p, photos: [...p.photos, ...urls] }));
+    } catch (e) { alert("Photo upload failed: " + e.message); }
+    finally { setUploading(false); }
+  };
+  const removePhoto = (i) => setForm(p => ({ ...p, photos: p.photos.filter((_, j) => j !== i) }));
+  const toggleFeature = (f) => {
+    const has = form.features.includes(f);
+    set("features", has ? form.features.filter(x => x !== f) : [...form.features, f]);
+  };
+
+  const submit = async () => {
+    if (!form.year || !form.make || !form.model || !form.price) { setErr("Year, make, model, and price are required."); return; }
+    if (form.photos.length === 0) { setErr("At least 1 photo is required."); return; }
+    setErr(""); setSaving(true);
+    const locationStr = form.area ? `${form.area}, ${form.city || ""}` : (form.city || form.region || form.country);
+    try {
+      await onSave(listing.id, {
+        year: parseInt(form.year, 10), make: form.make.trim(), model: form.model.trim(), trim: form.trim.trim() || null,
+        mileage: parseInt(form.mileage || 0, 10), price: parseInt(form.price, 10),
+        currency: CURRENCY_BY_COUNTRY[form.country] || "ETB",
+        country: form.country, region: form.region || null, city: form.city || null,
+        area: form.area || null, location: locationStr, landmark: form.landmark.trim() || null,
+        gpsLat: form.gpsLat, gpsLng: form.gpsLng, plateCode: form.plateCode || null, dutyStatus: form.dutyStatus || null,
+        bodyStyle: form.bodyStyle, fuelType: form.fuelType, drivetrain: form.drivetrain, transmission: form.transmission,
+        engine: form.engine.trim() || null, power: form.power ? parseInt(form.power, 10) : null,
+        exteriorColor: form.exteriorColor || null, interiorColor: form.interiorColor || null,
+        seats: form.seats || null, doors: form.doors || null, mpg: form.mpg ? parseInt(form.mpg, 10) : null,
+        description: form.description.trim(), features: form.features, photos: form.photos,
+        financingAvailable: !!form.financingAvailable, negotiable: !!form.negotiable,
+        exchangeAccepted: !!form.exchangeAccepted, condition: form.condition,
+      });
+    } catch (e) {
+      setErr(e.message); setSaving(false);
+    }
+  };
+
+  const inputCls = "mt-1.5 w-full h-12 rounded-xl bg-neutral-900 border border-neutral-800 px-4 text-white text-sm outline-none focus:border-emerald-500";
+  const selectCls = inputCls;
+  const chipCls = (on) => `px-3 h-9 rounded-full border text-sm ${on ? "border-emerald-500 bg-emerald-500/10 text-emerald-300" : "border-neutral-700 text-neutral-200"}`;
+
+  return (
+    <div className="pb-32">
+      <div className="px-5 pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onCancel} className="w-10 h-10 rounded-full border border-neutral-700 flex items-center justify-center"><ChevronLeft className="w-5 h-5 text-white" /></button>
+        <h1 className="text-white text-xl font-bold flex-1">Edit listing</h1>
+      </div>
+      <div className="px-5 space-y-4">
+        {/* Photos */}
+        <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+          <h3 className="text-white font-semibold text-[15px] mb-3">Photos</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {form.photos.map((p, i) => (
+              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-neutral-800">
+                <img src={p} alt="" className="w-full h-full object-cover" />
+                {i === 0 && <div className="absolute top-1 left-1 px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-semibold">Main</div>}
+                <button onClick={() => removePhoto(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center"><X className="w-3.5 h-3.5 text-white" /></button>
+              </div>
+            ))}
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="aspect-square rounded-xl border-2 border-dashed border-neutral-700 flex flex-col items-center justify-center text-neutral-400 active:bg-neutral-900 disabled:opacity-50">
+              <Camera className="w-6 h-6" /><span className="text-[11px] mt-1">{uploading ? "Uploading…" : "Add"}</span>
+            </button>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
+        </div>
+
+        {/* Basic info */}
+        <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800 space-y-3">
+          <h3 className="text-white font-semibold text-[15px]">Vehicle details</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Year *</span><input type="number" value={form.year} onChange={(e) => set("year", e.target.value)} className={inputCls} /></label>
+            <label className="block"><span className="text-xs text-neutral-400">Make *</span>
+              <select value={form.make} onChange={(e) => { set("make", e.target.value); set("model", ""); }} className={selectCls}>
+                <option value="">Select</option>{POPULAR_MAKES.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Model *</span>
+              {form.make && MODELS_BY_MAKE[form.make] ? (
+                <select value={form.model} onChange={(e) => set("model", e.target.value)} className={selectCls}>
+                  <option value="">Select</option>{MODELS_BY_MAKE[form.make].map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              ) : <input value={form.model} onChange={(e) => set("model", e.target.value)} className={inputCls} />}
+            </label>
+            <label className="block"><span className="text-xs text-neutral-400">Trim</span><input value={form.trim} onChange={(e) => set("trim", e.target.value)} className={inputCls} /></label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Condition</span>
+              <select value={form.condition} onChange={(e) => set("condition", e.target.value)} className={selectCls}><option value="used">Used</option><option value="new">New</option></select>
+            </label>
+            <label className="block"><span className="text-xs text-neutral-400">Mileage (km)</span><input type="number" value={form.mileage} onChange={(e) => set("mileage", e.target.value)} className={inputCls} /></label>
+          </div>
+          <label className="block"><span className="text-xs text-neutral-400">Price *</span><input type="number" value={form.price} onChange={(e) => set("price", e.target.value)} className={inputCls} /></label>
+        </div>
+
+        {/* Specs */}
+        <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800 space-y-3">
+          <h3 className="text-white font-semibold text-[15px]">Specifications</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Body</span><select value={form.bodyStyle} onChange={(e) => set("bodyStyle", e.target.value)} className={selectCls}>{BODY_STYLES.map(b => <option key={b}>{b}</option>)}</select></label>
+            <label className="block"><span className="text-xs text-neutral-400">Fuel</span><select value={form.fuelType} onChange={(e) => set("fuelType", e.target.value)} className={selectCls}>{FUEL_TYPES.map(f => <option key={f}>{f}</option>)}</select></label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Drivetrain</span><select value={form.drivetrain} onChange={(e) => set("drivetrain", e.target.value)} className={selectCls}>{DRIVETRAINS.map(d => <option key={d}>{d}</option>)}</select></label>
+            <label className="block"><span className="text-xs text-neutral-400">Transmission</span><select value={form.transmission} onChange={(e) => set("transmission", e.target.value)} className={selectCls}>{TRANSMISSIONS.map(t => <option key={t}>{t}</option>)}</select></label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="text-xs text-neutral-400">Exterior</span><select value={form.exteriorColor} onChange={(e) => set("exteriorColor", e.target.value)} className={selectCls}><option value="">—</option>{EXTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select></label>
+            <label className="block"><span className="text-xs text-neutral-400">Interior</span><select value={form.interiorColor} onChange={(e) => set("interiorColor", e.target.value)} className={selectCls}><option value="">—</option>{INTERIOR_COLORS.map(c => <option key={c}>{c}</option>)}</select></label>
+          </div>
+        </div>
+
+        {/* Features */}
+        <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+          <h3 className="text-white font-semibold text-[15px] mb-2">Features</h3>
+          <div className="flex gap-2 flex-wrap">
+            {FEATURE_LIST.map(f => <button key={f} onClick={() => toggleFeature(f)} className={chipCls(form.features.includes(f))}>{f}</button>)}
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
+          <h3 className="text-white font-semibold text-[15px] mb-2">Description</h3>
+          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={4}
+            className="w-full rounded-xl bg-neutral-900 border border-neutral-800 p-4 text-white text-sm outline-none focus:border-emerald-500 resize-none" />
+        </div>
+
+        {err && <div className="p-3 rounded-xl bg-red-900/30 border border-red-900 text-red-300 text-sm">{err}</div>}
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onCancel} className="flex-1 h-14 rounded-full border border-neutral-700 text-white font-medium">Cancel</button>
+          <button onClick={submit} disabled={saving} className="flex-1 h-14 rounded-full bg-emerald-700 text-white font-semibold disabled:opacity-50">
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessageSeller, currentUserId, requireAuth, onEdit }) {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [showReport, setShowReport] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const touchRef = useRef({ startX: 0, startY: 0 });
   const photos = listing.photos || [];
   const hasPhotos = photos.length > 0;
   const isOwner = currentUserId && listing.sellerId === currentUserId;
 
+  const nextPhoto = () => { if (photoIdx < photos.length - 1) setPhotoIdx(photoIdx + 1); };
+  const prevPhoto = () => { if (photoIdx > 0) setPhotoIdx(photoIdx - 1); };
+
+  const onTouchStart = (e) => {
+    touchRef.current.startX = e.touches[0].clientX;
+    touchRef.current.startY = e.touches[0].clientY;
+  };
+  const onTouchEnd = (e) => {
+    const dx = e.changedTouches[0].clientX - touchRef.current.startX;
+    const dy = e.changedTouches[0].clientY - touchRef.current.startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx < 0) nextPhoto();
+      else prevPhoto();
+    }
+  };
+
   return (
     <div className="pb-28">
-      <div className="relative">
+      {/* Photo gallery with swipe */}
+      <div className="relative" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {hasPhotos ? (
           <>
-            <img src={photos[photoIdx]} alt="" className="h-72 w-full object-cover" />
+            <div className="relative h-80 w-full overflow-hidden bg-black">
+              <img src={photos[photoIdx]} alt="" className="h-full w-full object-contain" />
+            </div>
+            {/* Left/Right arrows (desktop) */}
+            {photos.length > 1 && photoIdx > 0 && (
+              <button onClick={prevPhoto} className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {photos.length > 1 && photoIdx < photos.length - 1 && (
+              <button onClick={nextPhoto} className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {/* Photo counter */}
             {photos.length > 1 && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 backdrop-blur text-white text-xs font-medium">
+                {photoIdx + 1} / {photos.length}
+              </div>
+            )}
+            {/* Dots */}
+            {photos.length > 1 && photos.length <= 10 && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                 {photos.map((_, i) => (
-                  <button key={i} onClick={() => setPhotoIdx(i)} className={`w-2 h-2 rounded-full ${i === photoIdx ? "bg-white" : "bg-white/40"}`} />
+                  <button key={i} onClick={() => setPhotoIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === photoIdx ? "bg-white w-4" : "bg-white/40"}`} />
+                ))}
+              </div>
+            )}
+            {/* Thumbnail strip */}
+            {photos.length > 1 && (
+              <div className="flex gap-1.5 px-4 py-2 bg-black/40 overflow-x-auto no-scrollbar">
+                {photos.map((p, i) => (
+                  <button key={i} onClick={() => setPhotoIdx(i)}
+                    className={`w-14 h-10 rounded-md overflow-hidden shrink-0 border-2 transition-all ${i === photoIdx ? "border-emerald-500" : "border-transparent opacity-60"}`}>
+                    <img src={p} alt="" className="w-full h-full object-cover" />
+                  </button>
                 ))}
               </div>
             )}
           </>
         ) : <CarPhoto seed={listing.imageSeed || 1} className="h-72 w-full" />}
-        <button onClick={onBack} className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center"><ChevronLeft className="w-5 h-5 text-white" /></button>
-        <button onClick={() => onToggleSave(listing.id)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center"><Heart className={`w-5 h-5 ${saved ? "fill-red-500 text-red-500" : "text-white"}`} /></button>
+        <button onClick={onBack} className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center z-10"><ChevronLeft className="w-5 h-5 text-white" /></button>
+        <button onClick={() => onToggleSave(listing.id)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center z-10"><Heart className={`w-5 h-5 ${saved ? "fill-red-500 text-red-500" : "text-white"}`} /></button>
       </div>
+
       <div className="mx-4 mt-3 p-3 rounded-xl bg-amber-900/30 border border-amber-800 text-amber-200 text-xs leading-relaxed">
         ⚠️ Safety: Always meet in a public place. Never send money before seeing the car. Verify documents before paying.
       </div>
+
       <div className="px-5 pt-5">
         <h1 className="text-white text-2xl font-semibold">{listing.year} {listing.make} {listing.model}</h1>
         <p className="text-neutral-300 mt-1">{listing.trim}</p>
@@ -1310,44 +1530,52 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
             <MapPin className="w-3 h-3" /> Open in Google Maps
           </a>
         )}
+
         <div className="flex items-end justify-between mt-4">
-<div className="flex flex-wrap gap-2">
-  {listing.financingAvailable && (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-900/40 border border-emerald-800">
-      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-      <span className="text-xs text-emerald-300 font-medium">Financing</span>
-    </div>
-  )}
-  {listing.negotiable && (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-900/40 border border-amber-800">
-      <span className="text-xs text-amber-300 font-medium">Negotiable</span>
-    </div>
-  )}
-  {listing.exchangeAccepted && (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-900/40 border border-blue-800">
-      <span className="text-xs text-blue-300 font-medium">Exchange accepted</span>
-    </div>
-  )}
-  {listing.condition === "new" && (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-900/40 border border-purple-800">
-      <span className="text-xs text-purple-300 font-medium">Brand new</span>
-    </div>
-  )}
-</div>          
-<div className="text-right"><div className="text-3xl font-bold text-white">{formatMoney(listing.price, listing.currency)}</div></div>
+          <div className="flex flex-wrap gap-2">
+            {listing.financingAvailable && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-900/40 border border-emerald-800">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs text-emerald-300 font-medium">Financing</span>
+              </div>
+            )}
+            {listing.negotiable && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-900/40 border border-amber-800">
+                <span className="text-xs text-amber-300 font-medium">Negotiable</span>
+              </div>
+            )}
+            {listing.exchangeAccepted && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-900/40 border border-blue-800">
+                <span className="text-xs text-blue-300 font-medium">Exchange accepted</span>
+              </div>
+            )}
+            {listing.condition === "new" && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-900/40 border border-purple-800">
+                <span className="text-xs text-purple-300 font-medium">Brand new</span>
+              </div>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-3xl font-bold text-white">{formatMoney(listing.price, listing.currency)}</div>
+          </div>
         </div>
+
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Mileage</div><div className="text-white font-medium mt-0.5">{listing.mileage.toLocaleString()} km</div></div>
+          <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Mileage</div><div className="text-white font-medium mt-0.5">{listing.mileage?.toLocaleString() || 0} km</div></div>
           <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Body</div><div className="text-white font-medium mt-0.5">{listing.bodyStyle || "—"}</div></div>
           <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Year</div><div className="text-white font-medium mt-0.5">{listing.year}</div></div>
+          <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Condition</div><div className="text-white font-medium mt-0.5 capitalize">{listing.condition || "used"}</div></div>
           <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Exterior</div><div className="text-white font-medium mt-0.5">{listing.exteriorColor || "—"}</div></div>
+          {listing.interiorColor && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Interior</div><div className="text-white font-medium mt-0.5">{listing.interiorColor}</div></div>}
           {listing.engine && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Engine</div><div className="text-white font-medium mt-0.5">{listing.engine}</div></div>}
           {listing.power && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Power</div><div className="text-white font-medium mt-0.5">{listing.power} hp</div></div>}
           {listing.transmission && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Transmission</div><div className="text-white font-medium mt-0.5">{listing.transmission}</div></div>}
           {listing.drivetrain && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Drivetrain</div><div className="text-white font-medium mt-0.5">{listing.drivetrain}</div></div>}
+          {listing.fuelType && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Fuel</div><div className="text-white font-medium mt-0.5">{listing.fuelType}</div></div>}
           {listing.dutyStatus && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Duty status</div><div className="text-white font-medium mt-0.5">{listing.dutyStatus}</div></div>}
           {listing.plateCode && <div className="rounded-xl border border-neutral-800 p-3"><div className="text-xs text-neutral-400">Plate code</div><div className="text-white font-medium mt-0.5">Code {listing.plateCode}</div></div>}
         </div>
+
         {listing.features && listing.features.length > 0 && (
           <div className="mt-5">
             <h3 className="text-white font-semibold">Features</h3>
@@ -1356,12 +1584,14 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
             </div>
           </div>
         )}
+
         {listing.description && (
           <div className="mt-5">
             <h3 className="text-white font-semibold">Description</h3>
             <p className="text-neutral-300 text-sm mt-2 leading-relaxed">{listing.description}</p>
           </div>
         )}
+
         <div className="mt-5 rounded-2xl border border-neutral-800 p-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-full bg-neutral-800 flex items-center justify-center"><UserCircle2 className="w-6 h-6 text-neutral-300" /></div>
@@ -1381,11 +1611,13 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
             </a>
           )}
         </div>
+
         {!isOwner && (
           <button onClick={() => { if (requireAuth()) setShowReport(true); }} className="mt-3 w-full h-11 rounded-full border border-neutral-800 text-neutral-400 text-sm flex items-center justify-center gap-2">
             <Flag className="w-4 h-4" /> Report this listing
           </button>
         )}
+
         {showReport && (
           <div className="fixed inset-0 bg-black/70 z-50 flex items-end" onClick={() => setShowReport(false)}>
             <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md mx-auto bg-neutral-950 border-t border-neutral-800 rounded-t-3xl p-5 pb-24">
@@ -1410,10 +1642,19 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
             </div>
           </div>
         )}
-        {onDelete && isOwner && (
-          <button onClick={() => onDelete(listing.id)} className="mt-4 w-full h-12 rounded-full border border-red-900 text-red-400 font-medium flex items-center justify-center gap-2">
-            <Trash2 className="w-4 h-4" /> Delete my listing
-          </button>
+
+        {/* Owner actions: Edit + Delete */}
+        {isOwner && (
+          <div className="mt-5 space-y-2">
+            <button onClick={() => onEdit(listing)} className="w-full h-12 rounded-full bg-neutral-900 border border-emerald-700 text-emerald-400 font-medium flex items-center justify-center gap-2">
+              <FileText className="w-4 h-4" /> Edit listing
+            </button>
+            {onDelete && (
+              <button onClick={() => onDelete(listing.id)} className="w-full h-12 rounded-full border border-red-900 text-red-400 font-medium flex items-center justify-center gap-2">
+                <Trash2 className="w-4 h-4" /> Delete my listing
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -2479,6 +2720,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
 
   const [adminOpen, setAdminOpen] = useState(false);
+  const [editingListing, setEditingListing] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState("signin");
   const [signInGateOpen, setSignInGateOpen] = useState(false);
@@ -2570,6 +2812,18 @@ export default function App() {
     setView("detail");
   };
 
+ const handleUpdateListing = async (id, updates) => {
+    try {
+      await apiUpdateListing(id, updates);
+      const refreshed = await loadListings();
+      setListings(refreshed);
+      const updated = refreshed.find(l => l.id === id);
+      if (updated) { setSelectedListing(updated); setEditingListing(null); setView("detail"); }
+    } catch (e) {
+      throw e;
+    }
+  };
+
   const deleteListing = async (id) => {
     try {
       await apiDeleteListing(id);
@@ -2624,7 +2878,7 @@ export default function App() {
   };
 
   const onTabChange = (t) => {
-    setAdminOpen(false);
+    setAdminOpen(false);setEditingListing(null);
     if ((t === "sell" || t === "saved" || t === "messages") && !currentUserId) {
       setSignInGateAction(t === "sell" ? "post a listing" : t === "saved" ? "save listings" : "see your messages");
       setSignInGateOpen(true);
@@ -2713,12 +2967,20 @@ export default function App() {
             resultCount={filteredCount} activeCount={countActiveFilters(filters)}
             initialOpenSection={filterOpenSection} />
         )}
-        {view === "detail" && selectedListing && (
+        {editingListing && (
+          <EditListingScreen
+            listing={editingListing}
+            onSave={handleUpdateListing}
+            onCancel={() => { setEditingListing(null); setView("detail"); }}
+          />
+        )}
+        
+        {view === "detail" && selectedListing && !editingListing && (
           <DetailScreen listing={selectedListing} saved={savedIds.includes(selectedListing.id)}
             onToggleSave={toggleSave} currentUserId={currentUserId} requireAuth={requireAuth}
             onBack={() => setView(tab === "saved" ? "saved" : tab === "more" ? "more" : tab === "dealer" ? "dealer" : "results")}
             onDelete={selectedListing.sellerId === currentUserId ? deleteListing : null}
-            onMessageSeller={startMessageSeller} />
+            onMessageSeller={startMessageSeller}onEdit={(l) => { setEditingListing(l); }} />
         )}
         {view === "sell" && (
           <SellScreen onCreate={createListing} currentUserId={currentUserId}
