@@ -21,6 +21,13 @@ import {
   signOut as apiSignOut,
   updateProfile as apiUpdateProfile,
   resetPassword,
+  getAdminStats,
+  getAllUsers,
+  getAllListings,
+  getAllReports,
+  adminDeleteListing,
+  adminUpdateProfile,
+  adminUpdateReport,
 } from "./lib/storage";
 
 /* =========================================================================
@@ -1869,8 +1876,7 @@ const LEGAL_TEXT = {
   disclaimer: "DISCLAIMER\n\nThis platform is a listings service only. We do not own, inspect, or sell any vehicles. All transactions occur directly between buyers and sellers at their own risk.",
 };
 
-function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated }) {
-  const [legalView, setLegalView] = useState(null);
+function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated, onOpenAdmin }) {  const [legalView, setLegalView] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -2010,6 +2016,13 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
         </div>
       )}
       <div className="border-t border-neutral-900" />
+      {currentProfile?.is_admin && (
+        <>
+          <div className="border-t border-neutral-900 mt-2" />
+          <div className="px-5 py-2 text-xs tracking-wider text-neutral-500 uppercase bg-neutral-900/40">Admin</div>
+          <Row icon={Shield} label="Admin Dashboard" onClick={onOpenAdmin} />
+        </>
+      )}
       <Row icon={FileText} label="Terms of Service" onClick={() => setLegalView("terms")} />
       <Row icon={FileText} label="Privacy Policy" onClick={() => setLegalView("privacy")} />
       <Row icon={FileText} label="Disclaimer" onClick={() => setLegalView("disclaimer")} />
@@ -2022,6 +2035,250 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
             </div>
             <div className="overflow-y-auto p-5 pb-16 text-neutral-300 text-sm whitespace-pre-wrap leading-relaxed">{LEGAL_TEXT[legalView]}</div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================================
+   SCREEN: ADMIN DASHBOARD
+   ========================================================================= */
+
+function AdminScreen({ onBack }) {
+  const [tab, setTab] = useState("stats");
+  const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [listings, setListings] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const [s, u, l, r] = await Promise.all([
+          getAdminStats(),
+          getAllUsers(),
+          getAllListings(),
+          getAllReports(),
+        ]);
+        setStats(s);
+        setUsers(u);
+        setListings(l);
+        setReports(r);
+      } catch (e) {
+        console.error("Admin load error:", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleDeleteListing = async (id) => {
+    if (!confirm("Delete this listing permanently?")) return;
+    try {
+      await adminDeleteListing(id);
+      setListings(prev => prev.filter(l => l.id !== id));
+      setStats(prev => prev ? { ...prev, listings: prev.listings - 1 } : prev);
+    } catch (e) {
+      alert("Delete failed: " + e.message);
+    }
+  };
+
+  const handleToggleDisable = async (user) => {
+    const newVal = !user.disabled;
+    try {
+      await adminUpdateProfile(user.id, { disabled: newVal });
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, disabled: newVal } : u));
+    } catch (e) {
+      alert("Update failed: " + e.message);
+    }
+  };
+
+  const handleResolveReport = async (reportId, newStatus) => {
+    try {
+      await adminUpdateReport(reportId, { status: newStatus });
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: newStatus } : r));
+    } catch (e) {
+      alert("Update failed: " + e.message);
+    }
+  };
+
+  const tabCls = (t) => `flex-1 h-11 text-sm font-medium relative ${tab === t ? "text-emerald-400" : "text-neutral-400"}`;
+  const statCard = (label, value, color = "text-white") => (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+      <div className={`text-3xl font-bold ${color}`}>{value}</div>
+      <div className="text-neutral-400 text-xs mt-1 uppercase tracking-wider">{label}</div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="pb-28 pt-16 text-center">
+        <div className="text-neutral-400">Loading admin data…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-28">
+      <div className="px-5 pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full border border-neutral-700 flex items-center justify-center">
+          <ChevronLeft className="w-5 h-5 text-white" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-white text-xl font-bold">Admin Dashboard</h1>
+          <p className="text-neutral-500 text-xs">Manage your marketplace</p>
+        </div>
+        <Shield className="w-6 h-6 text-emerald-400" />
+      </div>
+
+      <div className="mx-4 mt-2 grid grid-cols-2 gap-3">
+        {stats && (
+          <>
+            {statCard("Total Users", stats.users, "text-emerald-400")}
+            {statCard("Listings", stats.listings, "text-white")}
+            {statCard("Reports", stats.reports, stats.reports > 0 ? "text-amber-400" : "text-white")}
+            {statCard("Messages", stats.messages, "text-white")}
+          </>
+        )}
+      </div>
+
+      <div className="mt-5 grid grid-cols-3 border-b border-neutral-800">
+        <button onClick={() => setTab("users")} className={tabCls("users")}>
+          Users ({users.length})
+          {tab === "users" && <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-emerald-500" />}
+        </button>
+        <button onClick={() => setTab("listings")} className={tabCls("listings")}>
+          Listings ({listings.length})
+          {tab === "listings" && <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-emerald-500" />}
+        </button>
+        <button onClick={() => setTab("reports")} className={tabCls("reports")}>
+          Reports ({reports.length})
+          {tab === "reports" && <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-emerald-500" />}
+        </button>
+      </div>
+
+      {tab === "users" && (
+        <div className="mt-2">
+          {users.length === 0 ? (
+            <div className="text-center text-neutral-500 mt-10">No users yet.</div>
+          ) : users.map(u => (
+            <div key={u.id} className="px-5 py-3 border-b border-neutral-900 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center shrink-0">
+                <UserCircle2 className="w-5 h-5 text-neutral-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{u.name || "—"}</div>
+                <div className="text-neutral-400 text-xs truncate">{u.email}</div>
+                <div className="text-neutral-500 text-xs flex gap-2 mt-0.5">
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${u.role === "seller" ? "bg-blue-900/40 text-blue-300" : "bg-neutral-800 text-neutral-300"}`}>
+                    {u.role || "buyer"}
+                  </span>
+                  {u.is_admin && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-900/40 text-emerald-300">Admin</span>}
+                  {u.disabled && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-900/40 text-red-300">Disabled</span>}
+                  <span>{new Date(u.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+              {!u.is_admin && (
+                <button onClick={() => handleToggleDisable(u)}
+                  className={`px-3 h-8 rounded-lg text-xs font-medium border ${u.disabled ? "border-emerald-700 text-emerald-400" : "border-red-800 text-red-400"}`}>
+                  {u.disabled ? "Enable" : "Disable"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "listings" && (
+        <div className="mt-2">
+          {listings.length === 0 ? (
+            <div className="text-center text-neutral-500 mt-10">No listings yet.</div>
+          ) : listings.map(l => (
+            <div key={l.id} className="px-5 py-3 border-b border-neutral-900 flex items-center gap-3">
+              <div className="w-14 h-10 rounded-md overflow-hidden bg-neutral-800 shrink-0">
+                {l.photos && l.photos[0] ? (
+                  <img src={l.photos[0]} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"><Car className="w-5 h-5 text-neutral-600" /></div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{l.year} {l.make} {l.model}</div>
+                <div className="text-neutral-400 text-xs truncate">
+                  {l.currency} {l.price?.toLocaleString()} · {l.location || l.city || l.country || "—"}
+                </div>
+                <div className="text-neutral-500 text-xs mt-0.5">
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${l.status === "active" ? "bg-emerald-900/40 text-emerald-300" : "bg-neutral-800 text-neutral-300"}`}>
+                    {l.status || "active"}
+                  </span>
+                  {" "}{new Date(l.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+              <button onClick={() => handleDeleteListing(l.id)}
+                className="w-9 h-9 rounded-lg border border-red-800 flex items-center justify-center">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "reports" && (
+        <div className="mt-2">
+          {reports.length === 0 ? (
+            <div className="text-center text-neutral-500 mt-10">No reports yet.</div>
+          ) : reports.map(r => {
+            const listing = listings.find(l => l.id === r.listing_id);
+            const reporter = users.find(u => u.id === r.reporter_id);
+            return (
+              <div key={r.id} className="px-5 py-4 border-b border-neutral-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-medium">
+                      {listing ? `${listing.year} ${listing.make} ${listing.model}` : "Unknown listing"}
+                    </div>
+                    <div className="text-neutral-400 text-xs mt-0.5">
+                      Reported by: {reporter?.name || reporter?.email || "Unknown"}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-xs font-medium border border-amber-800">
+                        {r.reason}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        r.status === "resolved" ? "bg-emerald-900/40 text-emerald-300 border-emerald-800" :
+                        r.status === "dismissed" ? "bg-neutral-800 text-neutral-400 border-neutral-700" :
+                        "bg-red-900/40 text-red-300 border-red-800"
+                      }`}>
+                        {r.status || "pending"}
+                      </span>
+                    </div>
+                    <div className="text-neutral-500 text-xs mt-1">{new Date(r.created_at).toLocaleDateString()}</div>
+                  </div>
+                </div>
+                {r.status === "pending" && (
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => handleResolveReport(r.id, "resolved")}
+                      className="flex-1 h-9 rounded-lg bg-emerald-700 text-white text-xs font-medium">
+                      Resolve
+                    </button>
+                    <button onClick={() => handleResolveReport(r.id, "dismissed")}
+                      className="flex-1 h-9 rounded-lg border border-neutral-700 text-neutral-300 text-xs font-medium">
+                      Dismiss
+                    </button>
+                    {listing && (
+                      <button onClick={() => { handleDeleteListing(listing.id); handleResolveReport(r.id, "resolved"); }}
+                        className="flex-1 h-9 rounded-lg bg-red-700 text-white text-xs font-medium">
+                        Delete listing
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -2082,6 +2339,7 @@ export default function App() {
   const [threads, setThreads] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
+  const [adminOpen, setAdminOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState("signin");
   const [signInGateOpen, setSignInGateOpen] = useState(false);
@@ -2227,6 +2485,7 @@ export default function App() {
   };
 
   const onTabChange = (t) => {
+    setAdminOpen(false);
     if ((t === "sell" || t === "saved" || t === "messages") && !currentUserId) {
       setSignInGateAction(t === "sell" ? "post a listing" : t === "saved" ? "save listings" : "see your messages");
       setSignInGateOpen(true);
@@ -2275,6 +2534,7 @@ export default function App() {
         .range-input::-moz-range-track { background: transparent; border: none; }
       `}</style>
       <div className="relative w-full max-w-md bg-neutral-950 min-h-screen text-white">
+        
         {view === "shop" && (
           <ShopScreen
             onSearchMakes={() => { setBrowseTab("make"); setView("browse"); }}
@@ -2349,12 +2609,18 @@ export default function App() {
           <ThreadScreen thread={activeThread} currentUserId={currentUserId}
             listing={activeThreadListing} onBack={() => setView("messages")} onSend={sendMessage} />
         )}
-{view === "more" && (
-  <MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
-    onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
-    onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
-    onProfileUpdated={async () => { setCurrentProfile(await getCurrentProfile()); }} />
+{adminOpen && currentProfile?.is_admin && (
+          <AdminScreen onBack={() => setAdminOpen(false)} />
+        )}
+{view === "more" && adminOpen && currentProfile?.is_admin && (
+  <AdminScreen onBack={() => setAdminOpen(false)} />
 )}
+{view === "more" && !adminOpen && (
+<MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
+  onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
+  onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
+  onProfileUpdated={async () => { setCurrentProfile(await getCurrentProfile()); }}
+  onOpenAdmin={() => setAdminOpen(true)} />)}
 
         <AuthModal open={authModalOpen} mode={authMode} setMode={setAuthMode}
           onClose={() => setAuthModalOpen(false)} onSuccess={() => {}} />

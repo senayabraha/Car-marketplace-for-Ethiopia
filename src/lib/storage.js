@@ -253,3 +253,79 @@ export async function resetPassword(email) {
   });
   if (error) throw error;
 }
+// ===== ADMIN FUNCTIONS =====
+
+export async function getAdminStats() {
+  const [users, listings, reports, threads, messages] = await Promise.all([
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    supabase.from("listings").select("id", { count: "exact", head: true }),
+    supabase.from("reports").select("id", { count: "exact", head: true }),
+    supabase.from("threads").select("id", { count: "exact", head: true }),
+    supabase.from("messages").select("id", { count: "exact", head: true }),
+  ]);
+  return {
+    users: users.count || 0,
+    listings: listings.count || 0,
+    reports: reports.count || 0,
+    threads: threads.count || 0,
+    messages: messages.count || 0,
+  };
+}
+
+export async function getAllUsers() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getAllListings() {
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(r => ({
+    id: r.id,
+    sellerId: r.seller_id,
+    year: r.year,
+    make: r.make,
+    model: r.model,
+    trim: r.trim,
+    price: r.price,
+    currency: r.currency || "ETB",
+    status: r.status,
+    country: r.country,
+    region: r.region,
+    city: r.city,
+    location: r.location,
+    photos: r.photos || [],
+    createdAt: new Date(r.created_at).getTime(),
+  }));
+}
+
+export async function getAllReports() {
+  const { data, error } = await supabase
+    .from("reports")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function adminDeleteListing(id) {
+  const { error } = await supabase.from("listings").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function adminUpdateProfile(userId, updates) {
+  const { error } = await supabase.from("profiles").update(updates).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function adminUpdateReport(reportId, updates) {
+  const { error } = await supabase.from("reports").update(updates).eq("id", reportId);
+  if (error) throw error;
+}
