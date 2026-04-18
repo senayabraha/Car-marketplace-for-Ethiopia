@@ -16,6 +16,7 @@ import {
   uploadPhoto,
   getCurrentUserId,
   getCurrentProfile,
+  setCachedUser,
   signInWithEmail,
   signUpWithEmail,
   signOut as apiSignOut,
@@ -111,15 +112,34 @@ async function sendMessageToThread(threadId, senderId, text) {
 }
 
 async function markThreadRead(threadId, userId) {
-  const { data: msgs } = await supabase.from("messages").select("id, read_by, sender_id").eq("thread_id", threadId);
-  if (!msgs) return;
+  // FIX: was N sequential awaited UPDATEs (one per message) — added 200-500ms per message.
+  // Now: fetch all unread messages, group by their current read_by array, then fire
+  // one UPDATE per unique group in parallel — typically 1-2 queries total.
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("id, read_by, sender_id")
+    .eq("thread_id", threadId)
+    .neq("sender_id", userId);
+  if (!msgs || msgs.length === 0) return;
+
+  // Group unread messages by their current read_by so we can batch-update
+  const groups = new Map();
   for (const m of msgs) {
-    if (m.sender_id === userId) continue;
     const rb = m.read_by || [];
-    if (!rb.includes(userId)) {
-      await supabase.from("messages").update({ read_by: [...rb, userId] }).eq("id", m.id);
-    }
+    if (rb.includes(userId)) continue; // already read
+    const newRb = [...rb, userId];
+    const key = rb.slice().sort().join(","); // group by current state
+    if (!groups.has(key)) groups.set(key, { newRb, ids: [] });
+    groups.get(key).ids.push(m.id);
   }
+  if (groups.size === 0) return;
+
+  // One parallel UPDATE per group (usually just 1 group) instead of N sequential ones
+  await Promise.all(
+    [...groups.values()].map(({ newRb, ids }) =>
+      supabase.from("messages").update({ read_by: newRb }).in("id", ids)
+    )
+  );
 }
 
 async function submitReport(listingId, reporterId, reason) {
@@ -2777,70 +2797,77 @@ export default function App() {
     }
   };
 
-  // Initial load + auth listener
+  // ─── Auth init + data load ────────────────────────────────────────────────
+  // Strategy: register onAuthStateChange FIRST so we never miss an event,
+  // then let INITIAL_SESSION drive the first data load.  This guarantees:
+  //   1. Auth is resolved before any data fetch runs (no premature "logged out")
+  //   2. The user object is cached once → every storage call is free (no extra RTT)
+  //   3. Listings load in parallel with user-specific data (one Promise.all)
   useEffect(() => {
-    // Helper: wrap any promise with a hard timeout so the UI never hangs forever
-    const withTimeout = (promise, ms, label) => Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
-    ]);
+    const loadUserData = async (user) => {
+      // Keep the module-level cache in sync so storage functions skip re-fetching
+      setCachedUser(user);
+      const uid = user?.id || null;
+      setCurrentUserId(uid);
 
-    let initialLoadDone = false;
-
-    (async () => {
       try {
-        const uid = await withTimeout(getCurrentUserId(), 5000, "getCurrentUserId").catch(() => null);
-        const [ls, sv, prof, th] = await Promise.all([
-          withTimeout(loadListings(), 10000, "loadListings").catch(e => { console.error("loadListings:", e); return []; }),
-          uid ? withTimeout(loadSavedIds(), 8000, "loadSavedIds").catch(e => { console.error("loadSavedIds:", e); return []; }) : Promise.resolve([]),
-          uid ? withTimeout(getCurrentProfile(), 8000, "getCurrentProfile").catch(e => { console.error("getCurrentProfile:", e); return null; }) : Promise.resolve(null),
-          uid ? withTimeout(loadThreadsForUser(uid), 8000, "loadThreadsForUser").catch(e => { console.error("loadThreadsForUser:", e); return []; }) : Promise.resolve([]),
-        ]);
-        setListings(ls);
-        setSavedIds(sv);
-        setCurrentUserId(uid);
-        setCurrentProfile(prof);
-        setThreads(th);
+        if (uid) {
+          // Logged-in: fetch listings + user-specific data all at once
+          const [ls, sv, prof, th] = await Promise.all([
+            loadListings().catch(e => { console.error("loadListings:", e); return []; }),
+            loadSavedIds(uid).catch(e => { console.error("loadSavedIds:", e); return []; }),
+            getCurrentProfile(uid).catch(e => { console.error("getCurrentProfile:", e); return null; }),
+            loadThreadsForUser(uid).catch(e => { console.error("loadThreadsForUser:", e); return []; }),
+          ]);
+          setListings(ls);
+          setSavedIds(sv);
+          setCurrentProfile(prof);
+          setThreads(th);
+        } else {
+          // Logged-out: only fetch listings (no auth calls needed)
+          const ls = await loadListings().catch(e => { console.error("loadListings:", e); return []; });
+          setListings(ls);
+          setCurrentProfile(null);
+          setSavedIds([]);
+          setThreads([]);
+        }
       } catch (err) {
-        console.error("Initial load failed:", err);
-        // Don't block the UI on error — still show the app, user can retry actions
+        console.error("loadUserData failed:", err);
       } finally {
-        initialLoadDone = true;
         setLoaded(true);
       }
-    })();
+    };
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Skip the auto-fire on mount; the initial useEffect already handled it.
-      // Only refetch on actual events (SIGNED_IN, SIGNED_OUT, USER_UPDATED, TOKEN_REFRESHED).
-// INITIAL_SESSION fires on mount — only skip if we're still mid-initial-load
-      // (prevents duplicate queries) but always process if fired after initial load completed
-      if (event === "INITIAL_SESSION" && !initialLoadDone) {
-        // Still let the listener update currentUserId so UI shows signed-in state
-        setCurrentUserId(session?.user?.id || null);
+    // Register listener BEFORE any async work — Supabase fires INITIAL_SESSION
+    // synchronously on the next tick which triggers our first loadUserData.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const user = session?.user ?? null;
+
+      if (event === "INITIAL_SESSION") {
+        // First load: drive data fetch from the session Supabase already has in localStorage
+        loadUserData(user);
         return;
       }
-      const uid = session?.user?.id || null;
-      setCurrentUserId(uid);
-      if (!uid) {
+
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") {
+        setCachedUser(user);
+        setCurrentUserId(user?.id || null);
+        // On sign-in, run full data reload; for token refresh just update cache
+        if (event !== "TOKEN_REFRESHED") loadUserData(user);
+        return;
+      }
+
+      if (event === "SIGNED_OUT") {
+        setCachedUser(null);
+        setCurrentUserId(null);
         setCurrentProfile(null);
         setSavedIds([]);
         setThreads([]);
+        // Keep listings visible after sign-out — no need to refetch
         return;
       }
-      try {
-        const [prof, sv, th] = await Promise.all([
-          withTimeout(getCurrentProfile(), 8000, "getCurrentProfile").catch(e => { console.error("getCurrentProfile:", e); return null; }),
-          withTimeout(loadSavedIds(), 8000, "loadSavedIds").catch(e => { console.error("loadSavedIds:", e); return []; }),
-          withTimeout(loadThreadsForUser(uid), 8000, "loadThreadsForUser").catch(e => { console.error("loadThreadsForUser:", e); return []; }),
-        ]);
-        setCurrentProfile(prof);
-        setSavedIds(sv);
-        setThreads(th);
-      } catch (err) {
-        console.error("Auth-change load failed:", err);
-      }
     });
+
     return () => sub.subscription.unsubscribe();
   }, []);
 

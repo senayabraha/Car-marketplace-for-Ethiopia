@@ -7,9 +7,13 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // FIX: detectSessionInUrl: false — avoids redundant URL parsing on every refresh.
+      // FIX: removed flowType: 'pkce' — PKCE requires a one-time code in the URL to
+      //      restore a session. On a plain page refresh there is no code, so Supabase
+      //      discards the stored session and signs the user out. Use the default
+      //      implicit flow for email/password auth (no redirects needed).
+      detectSessionInUrl: false,
       storage: window.localStorage,
-      flowType: 'pkce',
     },
   }
 );

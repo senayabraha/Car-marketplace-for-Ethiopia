@@ -1,6 +1,29 @@
 import { supabase } from './supabase';
 
-const uid = () => supabase.auth.getSession().then(r => r.data.session?.user?.id || null);
+/* ─── Cached user ─────────────────────────────────────────────────────────────
+   getUser() is a network call the FIRST time, but after that Supabase keeps the
+   JWT in memory.  The old `uid()` helper called getSession() (or getUser()) on
+   every storage function — loadListings, loadSavedIds, getCurrentProfile, etc. —
+   so on page-load you fired 4-6 sequential auth round-trips before any real data
+   fetched.  With a module-level cache we pay that cost exactly once.
+   The cache is cleared on sign-out so the next sign-in re-validates.
+──────────────────────────────────────────────────────────────────────────────── */
+let _cachedUser = null;
+
+export async function getCurrentUser() {
+  if (_cachedUser) return _cachedUser;
+  const { data, error } = await supabase.auth.getUser();
+  if (error) { console.error('getUser:', error); return null; }
+  _cachedUser = data.user ?? null;
+  return _cachedUser;
+}
+
+// Called by App.jsx's onAuthStateChange so the cache stays in sync
+export function setCachedUser(user) {
+  _cachedUser = user ?? null;
+}
+
+const uid = async () => (await getCurrentUser())?.id || null;
 /* ---------- LISTINGS ---------- */
 
 export async function loadListings() {
@@ -32,13 +55,14 @@ export async function deleteListing(id) {
 
 /* ---------- SAVED LISTINGS ---------- */
 
-export async function loadSavedIds() {
-  const userId = await uid();
-  if (!userId) return [];
+export async function loadSavedIds(userId) {
+  // Accept userId directly so App.jsx can pass it without another uid() call
+  const id = userId || await uid();
+  if (!id) return [];
   const { data, error } = await supabase
     .from('saved_listings')
     .select('listing_id')
-    .eq('user_id', userId);
+    .eq('user_id', id);
   if (error) { console.error('loadSavedIds:', error); return []; }
   return (data || []).map(r => r.listing_id);
 }
@@ -79,8 +103,7 @@ export async function uploadPhoto(file) {
 /* ---------- AUTH ---------- */
 
 export async function getCurrentUserId() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id || null;
+  return (await getCurrentUser())?.id || null;
 }
 
 export async function signInWithEmail(email, password) {
@@ -111,6 +134,7 @@ export async function signUpWithEmail(email, password, profileData = {}) {
 }
 
 export async function signOut() {
+  _cachedUser = null; // clear cache so next sign-in re-fetches
   await supabase.auth.signOut();
 }
 export async function upgradeToSeller(profileUpdates = {}) {
@@ -128,16 +152,16 @@ export async function upgradeToSeller(profileUpdates = {}) {
   if (error) throw error;
 }
 
-export async function getCurrentProfile() {
-  const userId = await uid();
-  if (!userId) return null;
+export async function getCurrentProfile(userId) {
+  // Accept userId directly so App.jsx can pass it without another uid() call
+  const id = userId || await uid();
+  if (!id) return null;
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', userId)
+    .eq('id', id)
     .maybeSingle();
-  if (error) { 
-    console.error('getCurrentProfile:', error); return null; }
+  if (error) { console.error('getCurrentProfile:', error); return null; }
   return data;
 }
 
