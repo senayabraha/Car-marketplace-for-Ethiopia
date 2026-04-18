@@ -80,8 +80,8 @@ export async function uploadPhoto(file) {
 /* ---------- AUTH ---------- */
 
 export async function getCurrentUserId() {
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id || null;
 }
 
 export async function signInWithEmail(email, password) {
