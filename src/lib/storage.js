@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 
-const uid = () => supabase.auth.getUser().then(r => r.data.user?.id);
-
+const uid = () => supabase.auth.getSession().then(r => r.data.session?.user?.id || null);
 /* ---------- LISTINGS ---------- */
 
 export async function loadListings() {
