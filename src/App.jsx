@@ -36,11 +36,13 @@ import {
 
 async function loadThreadsForUser(userId) {
   if (!userId) return [];
+  // Fast: fetch thread summary only, not all messages
   const { data, error } = await supabase
     .from("threads")
-    .select("*, messages(*)")
+    .select("*")
     .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .limit(50);
   if (error) { console.error("loadThreads:", error); return []; }
   return (data || []).map(t => ({
     id: t.id,
@@ -50,16 +52,24 @@ async function loadThreadsForUser(userId) {
     buyerName: t.buyer_name || "Buyer",
     sellerName: t.seller_name || "Seller",
     updatedAt: new Date(t.updated_at).getTime(),
-    messages: (t.messages || [])
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-      .map(m => ({
-        id: m.id,
-        from: m.sender_id,
-        text: m.text,
-        at: new Date(m.created_at).getTime(),
-        readBy: m.read_by || [],
-      })),
-    unreadFor: computeUnread(t, userId),
+    messages: [], // loaded on-demand when thread is opened
+    unreadFor: [],
+  }));
+}
+
+async function loadMessagesForThread(threadId) {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+  if (error) { console.error("loadMessages:", error); return []; }
+  return (data || []).map(m => ({
+    id: m.id,
+    from: m.sender_id,
+    text: m.text,
+    at: new Date(m.created_at).getTime(),
+    readBy: m.read_by || [],
   }));
 }
 
@@ -2803,8 +2813,13 @@ export default function App() {
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Skip the auto-fire on mount; the initial useEffect already handled it.
       // Only refetch on actual events (SIGNED_IN, SIGNED_OUT, USER_UPDATED, TOKEN_REFRESHED).
-      if (!initialLoadDone && event === "INITIAL_SESSION") return;
-
+// INITIAL_SESSION fires on mount — only skip if we're still mid-initial-load
+      // (prevents duplicate queries) but always process if fired after initial load completed
+      if (event === "INITIAL_SESSION" && !initialLoadDone) {
+        // Still let the listener update currentUserId so UI shows signed-in state
+        setCurrentUserId(session?.user?.id || null);
+        return;
+      }
       const uid = session?.user?.id || null;
       setCurrentUserId(uid);
       if (!uid) {
@@ -3124,8 +3139,10 @@ export default function App() {
             onOpenThread={async (id) => {
               setSelectedThreadId(id);
               setView("thread");
+              // Load messages for this thread if not loaded yet
+              const msgs = await loadMessagesForThread(id);
+              setThreads(prev => prev.map(t => t.id === id ? { ...t, messages: msgs, unreadFor: [] } : t));
               await markThreadRead(id, currentUserId);
-              setThreads(await loadThreadsForUser(currentUserId));
             }} />
         )}
         {view === "thread" && activeThread && currentUserId && (
