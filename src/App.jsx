@@ -2769,14 +2769,22 @@ export default function App() {
 
   // Initial load + auth listener
   useEffect(() => {
+    // Helper: wrap any promise with a hard timeout so the UI never hangs forever
+    const withTimeout = (promise, ms, label) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+    ]);
+
+    let initialLoadDone = false;
+
     (async () => {
       try {
-        const uid = await getCurrentUserId();
+        const uid = await withTimeout(getCurrentUserId(), 5000, "getCurrentUserId").catch(() => null);
         const [ls, sv, prof, th] = await Promise.all([
-          loadListings().catch(e => { console.error("loadListings:", e); return []; }),
-          loadSavedIds().catch(e => { console.error("loadSavedIds:", e); return []; }),
-          uid ? getCurrentProfile().catch(e => { console.error("getCurrentProfile:", e); return null; }) : Promise.resolve(null),
-          uid ? loadThreadsForUser(uid).catch(e => { console.error("loadThreadsForUser:", e); return []; }) : Promise.resolve([]),
+          withTimeout(loadListings(), 10000, "loadListings").catch(e => { console.error("loadListings:", e); return []; }),
+          uid ? withTimeout(loadSavedIds(), 8000, "loadSavedIds").catch(e => { console.error("loadSavedIds:", e); return []; }) : Promise.resolve([]),
+          uid ? withTimeout(getCurrentProfile(), 8000, "getCurrentProfile").catch(e => { console.error("getCurrentProfile:", e); return null; }) : Promise.resolve(null),
+          uid ? withTimeout(loadThreadsForUser(uid), 8000, "loadThreadsForUser").catch(e => { console.error("loadThreadsForUser:", e); return []; }) : Promise.resolve([]),
         ]);
         setListings(ls);
         setSavedIds(sv);
@@ -2785,13 +2793,18 @@ export default function App() {
         setThreads(th);
       } catch (err) {
         console.error("Initial load failed:", err);
-        setLoadError(err.message || "Could not load data. Check your connection and try again.");
+        // Don't block the UI on error — still show the app, user can retry actions
       } finally {
+        initialLoadDone = true;
         setLoaded(true);
       }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Skip the auto-fire on mount; the initial useEffect already handled it.
+      // Only refetch on actual events (SIGNED_IN, SIGNED_OUT, USER_UPDATED, TOKEN_REFRESHED).
+      if (!initialLoadDone && event === "INITIAL_SESSION") return;
+
       const uid = session?.user?.id || null;
       setCurrentUserId(uid);
       if (!uid) {
@@ -2802,9 +2815,9 @@ export default function App() {
       }
       try {
         const [prof, sv, th] = await Promise.all([
-          getCurrentProfile().catch(e => { console.error("getCurrentProfile:", e); return null; }),
-          loadSavedIds().catch(e => { console.error("loadSavedIds:", e); return []; }),
-          loadThreadsForUser(uid).catch(e => { console.error("loadThreadsForUser:", e); return []; }),
+          withTimeout(getCurrentProfile(), 8000, "getCurrentProfile").catch(e => { console.error("getCurrentProfile:", e); return null; }),
+          withTimeout(loadSavedIds(), 8000, "loadSavedIds").catch(e => { console.error("loadSavedIds:", e); return []; }),
+          withTimeout(loadThreadsForUser(uid), 8000, "loadThreadsForUser").catch(e => { console.error("loadThreadsForUser:", e); return []; }),
         ]);
         setCurrentProfile(prof);
         setSavedIds(sv);
