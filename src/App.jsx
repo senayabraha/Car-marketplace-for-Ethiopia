@@ -3488,15 +3488,17 @@ export default function App() {
         .range-input::-webkit-slider-runnable-track { background: transparent; border: none; }
         .range-input::-moz-range-track { background: transparent; border: none; }
       `}</style>
-      <div className="relative w-full max-w-md bg-neutral-950 min-h-screen text-white" key={view}>
+      <div className="relative w-full max-w-md bg-neutral-950 min-h-screen text-white">
         
         {view === "shop" && (
+          <div key="shop" className="view-transition">
           <ShopScreen
             onSearchMakes={() => { setBrowseTab("make"); setView("browse"); }}
             onSearchBodyStyles={() => { setBrowseTab("body"); setView("browse"); }}
             onQuickSearch={(q) => goToResults(q)}
             onApplyLocation={(loc) => goToResults("", loc)}
           />
+          </div>
         )}
         {view === "browse" && (
           <BrowseScreen initialTab={browseTab} onBack={() => setView("shop")}
@@ -3516,6 +3518,7 @@ export default function App() {
             onPickTrim={(t) => goToResults("", { make: selectedMake, model: selectedModel, trim: t || undefined })} />
         )}
         {view === "results" && (
+          <div key="results" className="view-transition">
           <ResultsScreen listings={listings} query={query} filters={filters} setFilters={setFilters}
             sortMode={sortMode} setSortMode={setSortMode} savedIds={savedIds}
             onBack={() => setView("shop")} onOpen={openDetail} onToggleSave={toggleSave}
@@ -3523,6 +3526,7 @@ export default function App() {
             onClearQuery={() => { setQuery(""); setFilters({}); }}
             onSearchSubmit={(q) => setQuery(q || "")}
             loading={listingsLoading} />
+          </div>
         )}
         {view === "filters" && (
           <FiltersScreen filters={filters} setFilters={setFilters}
@@ -3552,16 +3556,19 @@ export default function App() {
             onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }} />
         )}
         {view === "saved" && (
+          <div key="saved" className="view-transition">
           <SavedScreen listings={listings} savedIds={savedIds} onOpen={openDetail}
             onToggleSave={toggleSave} currentUserId={currentUserId}
             onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
             loading={listingsLoading} />
+          </div>
         )}
         {view === "dealer" && (
           <AtDealerScreen listings={listings} onOpenListing={openDetail}
             onToggleSave={toggleSave} savedIds={savedIds} />
         )}
         {view === "messages" && (
+          <div key="messages" className="view-transition">
           <MessagesScreen threads={threads} currentUserId={currentUserId} listings={listings}
             onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
             loading={threadsLoading}
@@ -3573,6 +3580,7 @@ export default function App() {
               setThreads(prev => prev.map(t => t.id === id ? { ...t, messages: msgs, unreadFor: [] } : t));
               await markThreadRead(id, currentUserId);
             }} />
+          </div>
         )}
         {view === "thread" && activeThread && currentUserId && (
           <ThreadScreen thread={activeThread} currentUserId={currentUserId}
