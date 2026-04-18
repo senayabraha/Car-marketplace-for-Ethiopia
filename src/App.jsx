@@ -150,6 +150,57 @@ async function submitReport(listingId, reporterId, reason) {
 }
 
 /* =========================================================================
+   TOAST NOTIFICATION SYSTEM
+   ========================================================================= */
+
+const ToastContext = React.createContext(null);
+
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = React.useState([]);
+
+  const addToast = React.useCallback((message, type = "success", duration = 3000) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+  }, []);
+
+  const dismiss = React.useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  return (
+    <ToastContext.Provider value={addToast}>
+      {children}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 w-[calc(100vw-2rem)] max-w-sm pointer-events-none">
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            onClick={() => dismiss(t.id)}
+            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-sm
+              animate-[slideDown_0.25s_ease-out]
+              ${t.type === "success" ? "bg-neutral-900/95 border-emerald-700/60 text-emerald-300" : ""}
+              ${t.type === "error"   ? "bg-neutral-900/95 border-red-700/60 text-red-300" : ""}
+              ${t.type === "info"    ? "bg-neutral-900/95 border-neutral-600/60 text-neutral-200" : ""}
+            `}
+          >
+            <span className="text-lg leading-none">
+              {t.type === "success" ? "✓" : t.type === "error" ? "✕" : "ℹ"}
+            </span>
+            <span className="text-[14px] font-medium leading-snug flex-1">{t.message}</span>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+function useToast() {
+  return React.useContext(ToastContext);
+}
+
+
+
+/* =========================================================================
    STATIC DATA — makes, models, body styles
    ========================================================================= */
 
@@ -329,28 +380,185 @@ const COUNTRIES_DATA = {
 };
 
 const CITIES_BY_COUNTRY_REGION = {
+  // Ethiopia
   "Ethiopia|Addis Ababa": ["Addis Ababa"],
-  "Ethiopia|Amhara": ["Bahir Dar","Gondar","Dessie","Debre Birhan","Lalibela"],
-  "Ethiopia|Oromia": ["Adama","Jimma","Bishoftu","Shashemene","Sebeta"],
-  "Ethiopia|Sidama": ["Hawassa"],
-  "Ethiopia|Tigray": ["Mekelle","Adigrat","Axum"],
-  "Ethiopia|Dire Dawa": ["Dire Dawa"],
-  "Kenya|Nairobi": ["Nairobi"],
-  "Kenya|Mombasa": ["Mombasa"],
-  "Kenya|Kisumu": ["Kisumu"],
-  "Uganda|Central": ["Kampala","Entebbe","Mukono","Wakiso"],
+  "Ethiopia|Amhara":      ["Bahir Dar","Gondar","Dessie","Debre Birhan","Lalibela","Debre Markos","Woldia","Kombolcha"],
+  "Ethiopia|Oromia":      ["Adama","Jimma","Bishoftu","Shashemene","Sebeta","Shashamane","Nekemte","Asella","Ambo","Burayu","Holeta","Woliso"],
+  "Ethiopia|Sidama":      ["Hawassa"],
+  "Ethiopia|South Ethiopia": ["Arba Minch","Wolaita Sodo","Dilla","Hosaena"],
+  "Ethiopia|Tigray":      ["Mekelle","Adigrat","Axum","Shire","Adwa"],
+  "Ethiopia|Dire Dawa":   ["Dire Dawa"],
+  "Ethiopia|Harari":      ["Harar"],
+  "Ethiopia|Afar":        ["Semera","Logia","Chifra"],
+  "Ethiopia|Somali":      ["Jigjiga","Gode","Dolo Odo"],
+  // Kenya
+  "Kenya|Nairobi":        ["Nairobi"],
+  "Kenya|Mombasa":        ["Mombasa"],
+  "Kenya|Kisumu":         ["Kisumu"],
+  "Kenya|Nakuru":         ["Nakuru","Naivasha","Gilgil"],
+  "Kenya|Kiambu":         ["Thika","Kiambu","Ruiru","Limuru","Githunguri"],
+  "Kenya|Uasin Gishu":    ["Eldoret","Turbo","Moiben"],
+  "Kenya|Machakos":       ["Machakos","Athi River","Kangundo"],
+  // Uganda
+  "Uganda|Central":       ["Kampala","Entebbe","Wakiso","Mukono","Jinja"],
+  "Uganda|Eastern":       ["Jinja","Mbale","Tororo","Iganga"],
+  "Uganda|Northern":      ["Gulu","Lira","Arua"],
+  "Uganda|Western":       ["Mbarara","Kasese","Fort Portal","Masindi"],
+  // Tanzania
   "Tanzania|Dar es Salaam": ["Dar es Salaam"],
-  "Tanzania|Arusha": ["Arusha"],
-  "Rwanda|Kigali": ["Kigali"],
+  "Tanzania|Arusha":        ["Arusha","Moshi"],
+  "Tanzania|Mwanza":        ["Mwanza"],
+  "Tanzania|Dodoma":        ["Dodoma"],
+  // Rwanda
+  "Rwanda|Kigali":          ["Kigali"],
+  "Rwanda|Eastern":         ["Rwamagana","Nyagatare","Kibungo"],
+  "Rwanda|Southern":        ["Huye","Muhanga","Ruhango"],
+  "Rwanda|Northern":        ["Musanze","Byumba"],
+  "Rwanda|Western":         ["Rubavu","Rusizi","Karongi"],
+  // Djibouti
+  "Djibouti|Djibouti":      ["Djibouti"],
+  "Djibouti|Ali Sabieh":    ["Ali Sabieh"],
+  // Somalia
+  "Somalia|Banadir":        ["Mogadishu"],
+  "Somalia|Woqooyi Galbeed": ["Hargeisa","Berbera"],
 };
 
 const AREAS_BY_COUNTRY_CITY = {
-  "Ethiopia|Addis Ababa": ["Bole","CMC","Megenagna","Sarbet","Kazanchis","Ayat","Old Airport","Piazza","Summit","Gerji","Saris","Mexico"],
-  "Kenya|Nairobi": ["CBD","Westlands","Kilimani","Karen","Lavington","Runda","Parklands","Eastleigh"],
-  "Kenya|Mombasa": ["Nyali","Bamburi","Mtwapa","Likoni","Kisauni"],
-  "Tanzania|Dar es Salaam": ["Masaki","Oysterbay","Mikocheni","Kinondoni","Kariakoo","Upanga"],
-  "Uganda|Central": ["Kampala Central","Nakasero","Kololo","Bugolobi","Naguru","Ntinda","Bukoto","Muyenga"],
-  "Rwanda|Kigali": ["Kacyiru","Kimihurura","Remera","Nyamirambo","Gikondo","Kimironko"],
+  /* ── Ethiopia ─────────────────────────────────────────────────────────── */
+  "Ethiopia|Addis Ababa": [
+    "Alem Bank","Arat Kilo","Ayat","Bole","Bole Arabsa","Bole Bulbula",
+    "CMC","Ferensay Legasion","Gerji","Gotera","Jemo","Kality",
+    "Kazanchis","Kera","Kolfe","Kotebe","Lafto","Lebu",
+    "Lideta","Megenagna","Mehal Alem","Merkato","Mexico","Nifas Silk",
+    "Old Airport","Piazza","Sarbet","Saris","Shiro Meda",
+    "Sidist Kilo","Stadium","Summit","Tor Hailoch","Yeka",
+  ],
+  "Ethiopia|Bahir Dar": [
+    "Abay Mado","Belay Zeleke","Ghion","Ghion Hotel Area","Gish Abay Road","Kebele 01",
+    "Sefene Selam","Shimbit","Stadium Area","Tana Sub-City","Tis Abay",
+  ],
+  "Ethiopia|Gondar": [
+    "Azezo","Desta","Fasil Ghebbi Area","Kebele 01","Kebele 05","Maraki",
+    "Piazza Gondar","Tewodros Square","University Area","Woleka",
+  ],
+  "Ethiopia|Dessie": [
+    "Ambassel","Boru Meda","Combolcha Road","Hotit","Kebele 01","Kebele 06",
+    "Menafesha","Segno Gebeya","Stadium Area",
+  ],
+  "Ethiopia|Debre Birhan": [
+    "Chacha","Kebele 01","Kebele 03","Market Area","Shewa Robit Road","Stadium Area",
+  ],
+  "Ethiopia|Adama": [
+    "Adama City Center","Boku","Geda","Industrial Area","Kebele 01","Kebele 04",
+    "Kore","Nazret","Stadium Area","Welenchiti Road",
+  ],
+  "Ethiopia|Jimma": [
+    "Agaro Road","Bonga Road","Gembe","Jimma City Center","Jiren","Kebele 01",
+    "Kebele 05","Merkato Jimma","Stadium Area","University Area",
+  ],
+  "Ethiopia|Bishoftu": [
+    "Adama Road Side","Airport Road","City Center","Industrial Area","Kebele 01","Kebele 03",
+    "Kuriftu Area","Lake Shore",
+  ],
+  "Ethiopia|Shashemene": [
+    "Hawassa Road","Kebele 01","Kebele 06","Market Area","Shashemene City Center","Stadium Area",
+    "Wolaita Road",
+  ],
+  "Ethiopia|Sebeta": [
+    "Addis Ababa Outskirts","Holeta Road","Industrial Zone","Kebele 01","Lebu Road","Sebeta Town",
+  ],
+  "Ethiopia|Hawassa": [
+    "Kebele 01","Kebele 05","Kebele 10","Lake Side","Mehal Ketema","Menehariya",
+    "Piassa Hawassa","Referral Hospital Area","Secha","Stadium Area","Tabor","Tilte",
+    "University Area",
+  ],
+  "Ethiopia|Mekelle": [
+    "Adi Haki","Adigrat Road","Airport Road","Ayder","Hadnet","Industrial Area",
+    "Kebele 01","Kebele 07","Quiha","Semien","University Area",
+  ],
+  "Ethiopia|Adigrat": [
+    "Adigrat Town Center","Axum Road","Kebele 01","Market Area","Mekelle Road",
+  ],
+  "Ethiopia|Axum": [
+    "Adwa Road","Axum Town Center","Kebele 01","Market Area","Obelisk Area",
+  ],
+  "Ethiopia|Dire Dawa": [
+    "Addis Ketema","Aware","Dechatu","Dire Dawa City Center","Gendekore","Kebele 01",
+    "Kebele 08","Kezira","Legehare","Melka Jebdu","Railway Area","Sabian",
+  ],
+
+  /* ── Kenya ────────────────────────────────────────────────────────────── */
+  "Kenya|Nairobi": [
+    "Buruburu","CBD","Donholm","Eastleigh","Embakasi","Gigiri",
+    "Githurai","Hurlingham","Karen","Kasarani","Kayole","Kiambu Road",
+    "Kikuyu","Kileleshwa","Kilimani","Komarock","Langata","Lavington",
+    "Loresho","Muthaiga","Ngong","Njiru","Parklands","Ridgeways",
+    "Rongai","Rosslyn","Roysambu","Ruai","Ruaraka","Ruiru",
+    "Runda","South B","South C","Spring Valley","Thika Road","Umoja",
+    "Upperhill","Westlands",
+  ],
+  "Kenya|Mombasa": [
+    "Bamburi","Changamwe","Ganjoni","Kisauni","Kizingo","Likoni",
+    "Mikindani","Miritini","Mtwapa","Nyali","Old Town","Shimanzi",
+    "Tudor",
+  ],
+  "Kenya|Kisumu": [
+    "Kisumu CBD","Kondele","Lolwe","Mamboleo","Manyatta","Migosi",
+    "Milimani","Nyalenda","Riat Hills","Tom Mboya Estate",
+  ],
+  "Kenya|Nakuru": [
+    "Bahati","Barnabas","Bondeni","Free Area","Kivumbini","Lanet",
+    "London","Milimani Nakuru","Nakuru CBD","Pipeline","Racetrack","Section 58",
+  ],
+
+  /* ── Uganda ───────────────────────────────────────────────────────────── */
+  "Uganda|Kampala": [
+    "Bugolobi","Bukoto","Bulenga","Bweyogerere","Ggaba","Kabalagala",
+    "Kampala Central","Kansanga","Kireka","Kisaasi","Kiwatule","Kololo",
+    "Lubowa","Makindye","Munyonyo","Muyenga","Naalya","Naguru",
+    "Najjera","Nakasero","Nansana","Nsambya","Ntinda",
+  ],
+  "Uganda|Entebbe": [
+    "Abaita Ababiri","Airport Zone","Bugonga","Entebbe Town","Garuga","Katabi",
+    "Kiwafu","Nakiwogo",
+  ],
+  "Uganda|Wakiso": [
+    "Gayaza Road","Kasangati","Kira","Matugga","Namugongo","Wakiso Town",
+  ],
+
+  /* ── Tanzania ─────────────────────────────────────────────────────────── */
+  "Tanzania|Dar es Salaam": [
+    "Ada Estate","CBD Dar","Chang'ombe","Gerezani","Kariakoo","Kawe",
+    "Kijitonyama","Kimara","Kinondoni","Kisutu","Kivukoni","Kurasini",
+    "Makuburi","Masaki","Mbagala","Mikocheni","Mikoroshoni","Morocco",
+    "Msasani","Mwenge","Oyster Bay","Oysterbay","Segerea","Sinza",
+    "Tabata","Tegeta","Temeke","Ubungo","Upanga",
+  ],
+  "Tanzania|Arusha": [
+    "Arusha CBD","Kaloleni","Kijenge","Kimandolu","Muriet","Njiro",
+    "Olasiti","Sakina","Sanawari","Sekei","Themi",
+  ],
+
+  /* ── Rwanda ───────────────────────────────────────────────────────────── */
+  "Rwanda|Kigali": [
+    "Busanza","Downtown Kigali","Gahanga","Gikondo","Gisozi","Gitega",
+    "Jabana","Jali","Kacyiru","Kagarama","Kanombe","Kibagabaga",
+    "Kigali Heights Area","Kimihurura","Kimironko","Mageragere","Masaka","Muhima",
+    "Niboye","Norrsken Area","Nyagatovu","Nyakabanda","Nyamirambo","Nyarugunga",
+    "Remera","Rwezamenyo",
+  ],
+
+  /* ── Djibouti ─────────────────────────────────────────────────────────── */
+  "Djibouti|Djibouti": [
+    "Arhiba","Balbala","Douda","European Quarter","Gabode","PK12",
+    "Plateau du Serpent","Port Area","Quartier 7",
+  ],
+
+  /* ── Somalia ──────────────────────────────────────────────────────────── */
+  "Somalia|Mogadishu": [
+    "Abdalla Shireh","Dharkenley","Hamarweyne","Hodan","Howlwadaag","Karaan",
+    "Kaxda","Shangani","Waberi","Wadajir","Yaqshid",
+  ],
 };
 
 const PLATE_CODES_BY_COUNTRY = {
@@ -583,6 +791,57 @@ function getMainPhoto(listing) {
    LISTING CARD
    ========================================================================= */
 
+
+/* =========================================================================
+   SKELETON LOADERS
+   ========================================================================= */
+
+function SkeletonPulse({ className = "" }) {
+  return (
+    <div className={`rounded skeleton-shimmer ${className}`} />
+  );
+}
+
+function ListingCardSkeleton() {
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+      <SkeletonPulse className="h-52 w-full rounded-none" />
+      <div className="p-4 space-y-3">
+        <SkeletonPulse className="h-5 w-3/4" />
+        <SkeletonPulse className="h-4 w-1/2" />
+        <SkeletonPulse className="h-4 w-1/3" />
+        <div className="flex items-end justify-between mt-2">
+          <SkeletonPulse className="h-6 w-28" />
+          <SkeletonPulse className="h-6 w-16 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListingGridSkeleton({ count = 4 }) {
+  return (
+    <div className="px-4 space-y-4 mt-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <ListingCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+function ThreadSkeleton() {
+  return (
+    <div className="px-5 py-3 border-b border-neutral-900 flex items-center gap-3">
+      <SkeletonPulse className="w-12 h-12 rounded-full shrink-0" />
+      <div className="flex-1 space-y-2">
+        <SkeletonPulse className="h-4 w-1/2" />
+        <SkeletonPulse className="h-3 w-2/3" />
+      </div>
+      <SkeletonPulse className="h-3 w-10" />
+    </div>
+  );
+}
+
 function ListingCard({ listing, onOpen, saved, onToggleSave }) {
   const photo = getMainPhoto(listing);
   const mileageText = (listing.mileage == null || isNaN(listing.mileage))
@@ -704,7 +963,7 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
       } else {
         await signInWithEmail(email.trim(), password);
       }
-      onSuccess?.();
+      onSuccess?.(mode === "signup");
       onClose();
       setEmail(""); setPassword(""); setName(""); setPhone(""); setResetSent(false);
     } catch (ex) {
@@ -1016,7 +1275,7 @@ function TrimsScreen({ make, model, onBack, onPickTrim }) {
    SCREEN: RESULTS
    ========================================================================= */
 
-function ResultsScreen({ listings, query, filters, setFilters, sortMode, setSortMode, onBack, onOpen, savedIds, onToggleSave, onOpenFilters, onClearQuery, onSearchSubmit }) {
+function ResultsScreen({ listings, query, filters, setFilters, sortMode, setSortMode, onBack, onOpen, savedIds, onToggleSave, onOpenFilters, onClearQuery, onSearchSubmit, loading }) {
   const [showSort, setShowSort] = useState(false);
   const [showCondition, setShowCondition] = useState(false);
   const [searchDraft, setSearchDraft] = useState(query || "");
@@ -1073,11 +1332,30 @@ function ResultsScreen({ listings, query, filters, setFilters, sortMode, setSort
         <FilterChip onClick={() => onOpenFilters("Fuel type")} active={!!filters.fuelType}>Fuel</FilterChip>
       </div>
       <div className="mt-4 px-4 space-y-4">
-        {results.length === 0 ? (
-          <div className="mt-20 text-center text-neutral-500">No listings match your search.</div>
-        ) : results.map(l => (
-          <ListingCard key={l.id} listing={l} onOpen={onOpen} saved={savedIds.includes(l.id)} onToggleSave={onToggleSave} />
-        ))}
+        {loading ? (
+          <ListingGridSkeleton count={4} />
+        ) : results.length === 0 ? (
+          <div className="mt-24 flex flex-col items-center px-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mb-4">
+              <Search className="w-7 h-7 text-neutral-500" />
+            </div>
+            <p className="text-white font-semibold text-lg">No results found</p>
+            <p className="text-neutral-500 text-sm mt-1 max-w-xs">
+              {query ? `Nothing matched "${query}".` : "No listings match your current filters."}
+            </p>
+            <button onClick={onClearQuery}
+              className="mt-5 px-5 h-10 rounded-full bg-neutral-800 text-white text-sm font-medium border border-neutral-700">
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="text-neutral-500 text-xs px-1">{results.length} listing{results.length !== 1 ? "s" : ""}</p>
+            {results.map(l => (
+              <ListingCard key={l.id} listing={l} onOpen={onOpen} saved={savedIds.includes(l.id)} onToggleSave={onToggleSave} />
+            ))}
+          </>
+        )}
       </div>
       {showSort && (
         <BottomSheet title="Sort by" onClose={() => setShowSort(false)}>
@@ -2129,17 +2407,28 @@ function SellScreen({ onCreate, currentUserId, currentProfile, onSignIn }) {
    SCREEN: SAVED
    ========================================================================= */
 
-function SavedScreen({ listings, savedIds, onOpen, onToggleSave, currentUserId, onSignIn }) {
+function SavedScreen({ listings, savedIds, onOpen, onToggleSave, currentUserId, onSignIn, loading }) {
   if (!currentUserId) return <AuthGate message="Sign in to save vehicles you're interested in." onSignIn={onSignIn} />;
   const saved = listings.filter(l => savedIds.includes(l.id));
   return (
     <div className="pb-28">
-      <div className="px-5 pt-5 pb-3"><h1 className="text-white text-2xl font-bold">Saved</h1></div>
-      {saved.length === 0 ? (
-        <div className="mt-16 text-center px-8">
-          <Heart className="w-12 h-12 text-neutral-700 mx-auto" />
-          <p className="text-neutral-400 mt-3">No saved cars yet.</p>
-          <p className="text-neutral-600 text-sm mt-1">Tap the heart on any listing to save it here.</p>
+      <div className="px-5 pt-5 pb-3">
+        <h1 className="text-white text-2xl font-bold">Saved</h1>
+        {!loading && saved.length > 0 && (
+          <p className="text-neutral-500 text-sm mt-0.5">{saved.length} vehicle{saved.length !== 1 ? "s" : ""}</p>
+        )}
+      </div>
+      {loading ? (
+        <ListingGridSkeleton count={3} />
+      ) : saved.length === 0 ? (
+        <div className="mt-20 flex flex-col items-center px-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-5">
+            <Heart className="w-9 h-9 text-neutral-600" />
+          </div>
+          <p className="text-white font-semibold text-lg">No saved cars yet</p>
+          <p className="text-neutral-500 text-sm mt-1.5 max-w-xs leading-relaxed">
+            Tap the ♥ on any listing to save it here for easy comparison.
+          </p>
         </div>
       ) : (
         <div className="px-4 space-y-4">
@@ -2224,16 +2513,24 @@ function AtDealerScreen({ listings, onOpenListing, onToggleSave, savedIds }) {
    SCREEN: MESSAGES
    ========================================================================= */
 
-function MessagesScreen({ threads, currentUserId, onOpenThread, onSignIn, listings }) {
+function MessagesScreen({ threads, currentUserId, onOpenThread, onSignIn, listings, loading }) {
   if (!currentUserId) return <AuthGate message="Sign in to message buyers and sellers." onSignIn={onSignIn} />;
   return (
     <div className="pb-28">
       <div className="px-5 pt-5 pb-3"><h1 className="text-white text-2xl font-bold">Messages</h1></div>
-      {threads.length === 0 ? (
-        <div className="mt-16 text-center px-8">
-          <MessageCircle className="w-12 h-12 text-neutral-700 mx-auto" />
-          <p className="text-neutral-400 mt-3">No conversations yet.</p>
-          <p className="text-neutral-600 text-sm mt-1">Tap "Message seller" on any listing to start one.</p>
+      {loading ? (
+        <div>
+          {[0,1,2].map(i => <ThreadSkeleton key={i} />)}
+        </div>
+      ) : threads.length === 0 ? (
+        <div className="mt-20 flex flex-col items-center px-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-5">
+            <MessageCircle className="w-9 h-9 text-neutral-600" />
+          </div>
+          <p className="text-white font-semibold text-lg">No conversations yet</p>
+          <p className="text-neutral-500 text-sm mt-1.5 max-w-xs leading-relaxed">
+            Open any listing and tap "Message seller" to start a conversation.
+          </p>
         </div>
       ) : (
         <div>
@@ -2241,17 +2538,22 @@ function MessagesScreen({ threads, currentUserId, onOpenThread, onSignIn, listin
             const other = currentUserId === t.buyerId ? t.sellerName : t.buyerName;
             const last = t.messages[t.messages.length - 1];
             const listing = listings.find(l => l.id === t.listingId);
+            const isUnread = (t.unreadFor || []).includes(currentUserId);
             return (
               <button key={t.id} onClick={() => onOpenThread(t.id)} className="w-full px-5 py-4 border-b border-neutral-900 active:bg-neutral-900 flex items-center gap-3 text-left">
-                <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center shrink-0"><UserCircle2 className="w-7 h-7 text-neutral-400" /></div>
+                <div className="relative w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center shrink-0">
+                  <UserCircle2 className="w-7 h-7 text-neutral-400" />
+                  {isUnread && <div className="absolute top-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-neutral-950" />}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="text-white font-medium truncate">{other}</div>
+                    <div className={`truncate ${isUnread ? "text-white font-semibold" : "text-white font-medium"}`}>{other}</div>
                     <div className="text-neutral-500 text-xs shrink-0 ml-2">{new Date(t.updatedAt).toLocaleDateString()}</div>
                   </div>
                   {listing && <div className="text-emerald-400 text-xs truncate">{listing.year} {listing.make} {listing.model}</div>}
-                  <div className="text-neutral-400 text-sm truncate mt-0.5">{last ? last.text : "(no messages)"}</div>
+                  <div className={`text-sm truncate mt-0.5 ${isUnread ? "text-neutral-200" : "text-neutral-400"}`}>{last ? last.text : "(no messages)"}</div>
                 </div>
+                <ChevronRight className="w-4 h-4 text-neutral-600 shrink-0" />
               </button>
             );
           })}
@@ -2775,10 +3077,12 @@ export default function App() {
   const [filterOpenSection, setFilterOpenSection] = useState(null);
 
   const [listings, setListings] = useState([]);
+  const [listingsLoading, setListingsLoading] = useState(true);
   const [savedIds, setSavedIds] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
   const [threads, setThreads] = useState([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
@@ -2788,6 +3092,8 @@ export default function App() {
   const [authMode, setAuthMode] = useState("signin");
   const [signInGateOpen, setSignInGateOpen] = useState(false);
   const [signInGateAction, setSignInGateAction] = useState("");
+
+  const toast = useToast();
 
   const refreshProfile = async () => {
     try {
@@ -2805,14 +3111,14 @@ export default function App() {
   //   3. Listings load in parallel with user-specific data (one Promise.all)
   useEffect(() => {
     const loadUserData = async (user) => {
-      // Keep the module-level cache in sync so storage functions skip re-fetching
       setCachedUser(user);
       const uid = user?.id || null;
       setCurrentUserId(uid);
+      setListingsLoading(true);
+      if (uid) setThreadsLoading(true);
 
       try {
         if (uid) {
-          // Logged-in: fetch listings + user-specific data all at once
           const [ls, sv, prof, th] = await Promise.all([
             loadListings().catch(e => { console.error("loadListings:", e); return []; }),
             loadSavedIds(uid).catch(e => { console.error("loadSavedIds:", e); return []; }),
@@ -2823,17 +3129,19 @@ export default function App() {
           setSavedIds(sv);
           setCurrentProfile(prof);
           setThreads(th);
+          setThreadsLoading(false);
         } else {
-          // Logged-out: only fetch listings (no auth calls needed)
           const ls = await loadListings().catch(e => { console.error("loadListings:", e); return []; });
           setListings(ls);
           setCurrentProfile(null);
           setSavedIds([]);
           setThreads([]);
+          setThreadsLoading(false);
         }
       } catch (err) {
         console.error("loadUserData failed:", err);
       } finally {
+        setListingsLoading(false);
         setLoaded(true);
       }
     };
@@ -2930,15 +3238,14 @@ export default function App() {
       return;
     }
     const wasSaved = savedIds.includes(id);
-    // Optimistic update
     setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
     try {
       await apiToggleSaved(id, wasSaved);
+      toast(wasSaved ? "Removed from saved" : "Listing saved!", "success");
     } catch (e) {
-      // Rollback on failure
       setSavedIds(prev => wasSaved ? [...prev, id] : prev.filter(x => x !== id));
       console.error("Save failed:", e);
-      alert("Could not save. Please try again.");
+      toast("Could not save. Please try again.", "error");
     }
   };
 
@@ -2949,6 +3256,7 @@ export default function App() {
     setListings(prev => [saved, ...prev]);
     setSelectedListing(saved);
     setView("detail");
+    toast("Listing posted! 🎉", "success");
   };
 
  const handleUpdateListing = async (id, updates) => {
@@ -2968,8 +3276,9 @@ export default function App() {
       await apiDeleteListing(id);
       setListings(prev => prev.filter(l => l.id !== id));
       setView("shop"); setTab("shop");
+      toast("Listing deleted", "info");
     } catch (e) {
-      alert("Could not delete: " + e.message);
+      toast("Could not delete: " + e.message, "error");
     }
   };
 
@@ -2982,6 +3291,7 @@ export default function App() {
   const onSignOut = async () => {
     try {
       await apiSignOut();
+      toast("Signed out", "info");
     } catch (e) {
       console.error("signOut:", e);
     }
@@ -3020,7 +3330,7 @@ export default function App() {
       await sendMessageToThread(threadId, currentUserId, text);
       setThreads(await loadThreadsForUser(currentUserId));
     } catch (e) {
-      alert("Send failed: " + e.message);
+      toast("Message failed to send. Try again.", "error");
     }
   };
 
@@ -3054,8 +3364,28 @@ export default function App() {
 
   if (!loaded) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <div className="text-neutral-400 text-sm">Loading…</div>
+      <div className="min-h-screen bg-neutral-950 flex justify-center">
+        <div className="relative w-full max-w-md bg-neutral-950 min-h-screen">
+          {/* Fake header */}
+          <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+            <div className="h-7 w-32 rounded-lg skeleton-shimmer" />
+            <div className="h-8 w-8 rounded-full skeleton-shimmer" />
+          </div>
+          {/* Fake search bar */}
+          <div className="px-4 mb-4">
+            <div className="h-11 rounded-full skeleton-shimmer" />
+          </div>
+          {/* Fake filter chips */}
+          <div className="px-4 flex gap-2 mb-4">
+            {[80, 64, 72, 56].map((w, i) => (
+              <div key={i} style={{ width: w }} className="h-8 rounded-full skeleton-shimmer shrink-0" />
+            ))}
+          </div>
+          {/* Fake listing cards */}
+          <div className="px-4 space-y-4">
+            {[0,1,2,3].map(i => <ListingCardSkeleton key={i} />)}
+          </div>
+        </div>
       </div>
     );
   }
@@ -3079,10 +3409,14 @@ export default function App() {
   const activeThreadListing = activeThread ? listings.find(l => l.id === activeThread.listingId) : null;
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-neutral-950 flex justify-center" style={{ fontFamily: "'Helvetica Neue', -apple-system, system-ui, sans-serif" }}>
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { scrollbar-width: none; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton-shimmer { background: linear-gradient(90deg, #262626 25%, #333 50%, #262626 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
         .range-input { pointer-events: none; }
         .range-input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: #ffffff; border: 2px solid #10b981; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
         .range-input::-moz-range-thumb { pointer-events: auto; appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: #ffffff; border: 2px solid #10b981; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
@@ -3122,7 +3456,8 @@ export default function App() {
             onBack={() => setView("shop")} onOpen={openDetail} onToggleSave={toggleSave}
             onOpenFilters={(section) => { setFilterOpenSection(section || null); setView("filters"); }}
             onClearQuery={() => { setQuery(""); setFilters({}); }}
-            onSearchSubmit={(q) => setQuery(q || "")} />
+            onSearchSubmit={(q) => setQuery(q || "")}
+            loading={listingsLoading} />
         )}
         {view === "filters" && (
           <FiltersScreen filters={filters} setFilters={setFilters}
@@ -3154,7 +3489,8 @@ export default function App() {
         {view === "saved" && (
           <SavedScreen listings={listings} savedIds={savedIds} onOpen={openDetail}
             onToggleSave={toggleSave} currentUserId={currentUserId}
-            onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }} />
+            onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
+            loading={listingsLoading} />
         )}
         {view === "dealer" && (
           <AtDealerScreen listings={listings} onOpenListing={openDetail}
@@ -3163,6 +3499,7 @@ export default function App() {
         {view === "messages" && (
           <MessagesScreen threads={threads} currentUserId={currentUserId} listings={listings}
             onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
+            loading={threadsLoading}
             onOpenThread={async (id) => {
               setSelectedThreadId(id);
               setView("thread");
@@ -3188,7 +3525,10 @@ export default function App() {
         )}
 
         <AuthModal open={authModalOpen} mode={authMode} setMode={setAuthMode}
-          onClose={() => setAuthModalOpen(false)} onSuccess={() => {}} />
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={(isNew) => {
+            toast(isNew ? "Account created! Welcome 🎉" : "Signed in!", "success");
+          }} />
         <SignInGate open={signInGateOpen} action={signInGateAction}
           onClose={() => setSignInGateOpen(false)}
           onSignIn={() => { setSignInGateOpen(false); setAuthMode("signin"); setAuthModalOpen(true); }}
@@ -3197,5 +3537,6 @@ export default function App() {
         <BottomNav tab={tab} setTab={onTabChange} unreadCount={unreadCount} />
       </div>
     </div>
+    </ToastProvider>
   );
 }
