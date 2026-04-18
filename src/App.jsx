@@ -2565,16 +2565,27 @@ function MessagesScreen({ threads, currentUserId, onOpenThread, onSignIn, listin
 
 function ThreadScreen({ thread, currentUserId, onBack, onSend, listing }) {
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
   const other = currentUserId === thread.buyerId ? thread.sellerName : thread.buyerName;
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [thread.messages.length]);
+  // Auto-scroll to bottom whenever messages change
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [thread.messages.length]);
 
-  const send = () => {
+  const send = async () => {
     const v = text.trim();
-    if (!v) return;
-    onSend(thread.id, v);
+    if (!v || sending) return;
+    // BUG FIX: clear text immediately (before await) so the UI feels instant,
+    // and guard with `sending` so rapid taps don't fire duplicate messages
     setText("");
+    setSending(true);
+    try {
+      await onSend(thread.id, v);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -2602,7 +2613,10 @@ function ThreadScreen({ thread, currentUserId, onBack, onSend, listing }) {
           <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder="Type a message..."
             className="flex-1 h-12 rounded-full bg-neutral-900 border border-neutral-800 px-5 text-white text-sm outline-none focus:border-emerald-500" />
-          <button onClick={send} className="w-12 h-12 rounded-full bg-emerald-700 text-white flex items-center justify-center"><Send className="w-5 h-5" /></button>
+          <button onClick={send} disabled={sending || !text.trim()}
+            className="w-12 h-12 rounded-full bg-emerald-700 text-white flex items-center justify-center disabled:opacity-40 transition-opacity">
+            <Send className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>
@@ -3231,12 +3245,19 @@ export default function App() {
     return false;
   };
 
+  // Tracks listing IDs currently mid-toggle so rapid double-taps are ignored
+  const savingRef = React.useRef(new Set());
+
   const toggleSave = async (id) => {
     if (!currentUserId) {
       setSignInGateAction("save listings");
       setSignInGateOpen(true);
       return;
     }
+    // BUG FIX: guard against in-flight duplicate calls (rapid taps / double-click)
+    if (savingRef.current.has(id)) return;
+    savingRef.current.add(id);
+
     const wasSaved = savedIds.includes(id);
     setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
     try {
@@ -3246,6 +3267,8 @@ export default function App() {
       setSavedIds(prev => wasSaved ? [...prev, id] : prev.filter(x => x !== id));
       console.error("Save failed:", e);
       toast("Could not save. Please try again.", "error");
+    } finally {
+      savingRef.current.delete(id);
     }
   };
 
@@ -3326,10 +3349,38 @@ export default function App() {
   };
 
   const sendMessage = async (threadId, text) => {
+    // BUG FIX: the old code called loadThreadsForUser() after sending, which
+    // returns threads with messages:[] (lazy-loaded). setThreads() then wiped
+    // the messages already in state → thread appeared blank until refresh.
+    // Fix: optimistically append the new message locally, then update only
+    // the thread's updatedAt without touching any messages array.
+    const optimisticMsg = {
+      id: `temp-${Date.now()}`,
+      from: currentUserId,
+      text,
+      at: Date.now(),
+      readBy: [currentUserId],
+    };
+    // Optimistic: append message immediately so the user sees it right away
+    setThreads(prev => prev.map(t => {
+      if (t.id !== threadId) return t;
+      return { ...t, messages: [...(t.messages || []), optimisticMsg], updatedAt: Date.now() };
+    }));
     try {
       await sendMessageToThread(threadId, currentUserId, text);
-      setThreads(await loadThreadsForUser(currentUserId));
+      // Replace the temp message with a real one from the server,
+      // preserving all other threads' messages intact
+      const msgs = await loadMessagesForThread(threadId);
+      setThreads(prev => prev.map(t => {
+        if (t.id !== threadId) return t;
+        return { ...t, messages: msgs, updatedAt: Date.now() };
+      }));
     } catch (e) {
+      // Roll back the optimistic message on failure
+      setThreads(prev => prev.map(t => {
+        if (t.id !== threadId) return t;
+        return { ...t, messages: (t.messages || []).filter(m => m.id !== optimisticMsg.id) };
+      }));
       toast("Message failed to send. Try again.", "error");
     }
   };
@@ -3342,9 +3393,21 @@ export default function App() {
       setSignInGateOpen(true);
       return;
     }
+    // BUG FIX: only reset search state when the user taps the Shop tab a SECOND
+    // time (i.e. they're already on it). Tapping Shop from another tab should
+    // return them to where they were, not blank the results page.
+    if (t === "shop") {
+      if (tab === "shop") {
+        // Already on shop → tap again = go home and clear search
+        setView("shop"); setQuery(""); setFilters({});
+      } else {
+        // Coming from another tab → restore last shop view
+        setView(view === "results" || view === "detail" || view === "browse" || view === "filters" ? view : "shop");
+      }
+    } else {
+      setView(t);
+    }
     setTab(t);
-    if (t === "shop") { setView("shop"); setQuery(""); setFilters({}); }
-    else setView(t);
   };
 
   const myListings = useMemo(
@@ -3416,14 +3479,16 @@ export default function App() {
         .no-scrollbar { scrollbar-width: none; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
         .skeleton-shimmer { background: linear-gradient(90deg, #262626 25%, #333 50%, #262626 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+        .view-transition { animation: fadeSlideIn 0.18s ease-out; }
         .range-input { pointer-events: none; }
         .range-input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: #ffffff; border: 2px solid #10b981; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
         .range-input::-moz-range-thumb { pointer-events: auto; appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: #ffffff; border: 2px solid #10b981; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
         .range-input::-webkit-slider-runnable-track { background: transparent; border: none; }
         .range-input::-moz-range-track { background: transparent; border: none; }
       `}</style>
-      <div className="relative w-full max-w-md bg-neutral-950 min-h-screen text-white">
+      <div className="relative w-full max-w-md bg-neutral-950 min-h-screen text-white" key={view}>
         
         {view === "shop" && (
           <ShopScreen
