@@ -486,9 +486,20 @@ function RangeSlider({ min, max, step = 1, valueMin, valueMax, onChange, format 
    ========================================================================= */
 
 function CarPhoto({ seed = 1, src, className = "" }) {
-  if (src) return <img src={src} alt="" className={`object-cover ${className}`} />;
+  const [broken, setBroken] = useState(false);
   const palettes = [["#1e3a8a","#0ea5e9"],["#0f172a","#64748b"],["#312e81","#6366f1"],["#064e3b","#10b981"],["#7c2d12","#f59e0b"],["#450a0a","#ef4444"],["#1f2937","#9ca3af"],["#4c1d95","#a78bfa"]];
   const [a, b] = palettes[seed % palettes.length];
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className={`object-cover ${className}`}
+      />
+    );
+  }
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(135deg, ${a} 0%, ${b} 100%)` }}>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -544,18 +555,37 @@ function getMainPhoto(listing) {
 
 function ListingCard({ listing, onOpen, saved, onToggleSave }) {
   const photo = getMainPhoto(listing);
+  const mileageText = (listing.mileage == null || isNaN(listing.mileage))
+    ? "Mileage not specified"
+    : listing.mileage >= 1000
+      ? `${Math.round(listing.mileage / 1000)}K km`
+      : `${listing.mileage} km`;
+
   return (
-    <div onClick={() => onOpen(listing)} className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden active:scale-[0.99] transition cursor-pointer">
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(listing)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(listing); } }}
+      aria-label={`${listing.year} ${listing.make} ${listing.model}, ${formatMoney(listing.price, listing.currency)}`}
+      className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden active:scale-[0.99] transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
+    >
       <div className="relative">
         <CarPhoto seed={listing.imageSeed || 1} src={photo} className="h-52 w-full" />
-        <button onClick={(e) => { e.stopPropagation(); onToggleSave(listing.id); }} className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
-          <Heart className={`w-5 h-5 ${saved ? "fill-red-500 text-red-500" : "text-white"}`} />
-        </button>
+        {/* Dealer ribbon — placed top-left so it doesn't cover the heart */}
         {listing.dealer && (
-          <div className="absolute top-0 right-0">
-            <div className="w-0 h-0 border-t-[56px] border-l-[56px] border-t-blue-600 border-l-transparent" />
+          <div className="absolute top-0 left-0">
+            <div className="w-0 h-0 border-t-[56px] border-r-[56px] border-t-blue-600 border-r-transparent" />
           </div>
         )}
+        <button
+          type="button"
+          aria-label={saved ? "Remove from saved" : "Save listing"}
+          onClick={(e) => { e.stopPropagation(); onToggleSave(listing.id); }}
+          className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center z-10"
+        >
+          <Heart className={`w-5 h-5 ${saved ? "fill-red-500 text-red-500" : "text-white"}`} />
+        </button>
       </div>
       <div className="p-4">
         {listing.dealer && (
@@ -563,32 +593,33 @@ function ListingCard({ listing, onOpen, saved, onToggleSave }) {
             Sponsored by {listing.sellerName}
           </p>
         )}
-        <div className="flex items-start justify-between">
-          <h3 className="text-[17px] font-semibold text-white">{listing.year} {listing.make} {listing.model}</h3>
-          <MoreVertical className="w-5 h-5 text-neutral-500 shrink-0" />
-        </div>
+        <h3 className="text-[17px] font-semibold text-white">{listing.year} {listing.make} {listing.model}</h3>
         <p className="text-sm text-neutral-300 mt-1">
-          {listing.trim || ""} · {listing.mileage >= 1000 ? `${Math.round(listing.mileage / 1000)}K` : listing.mileage} km
+          {listing.trim ? `${listing.trim} · ` : ""}{mileageText}
         </p>
         <div className="flex items-center gap-1 mt-1.5 text-sm text-neutral-400">
           <MapPin className="w-4 h-4" /><span>{listing.location || ""}</span>
         </div>
         <div className="flex items-end justify-between mt-3">
-          {listing.financingAvailable ? (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900/40 border border-emerald-800">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-xs text-emerald-300 font-medium">Financing available</span>
-            </div>
-          ) : <div />}
-          <div className="text-right">
+          <div className="flex flex-wrap gap-1.5">
+            {listing.financingAvailable && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900/40 border border-emerald-800">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-xs text-emerald-300 font-medium">Financing</span>
+              </div>
+            )}
+            {listing.negotiable && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-900/40 border border-amber-800">
+                <span className="text-xs text-amber-300 font-medium">Negotiable</span>
+              </div>
+            )}
+          </div>
+          <div className="text-right shrink-0 ml-2">
             <div className="text-xl font-semibold text-white">{formatMoney(listing.price, listing.currency)}</div>
           </div>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onOpen(listing); }} className="mt-4 w-full h-12 rounded-full bg-emerald-700 text-white font-medium">
-          Check availability
-        </button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -2256,7 +2287,8 @@ const LEGAL_TEXT = {
   disclaimer: "DISCLAIMER\n\nThis platform is a listings service only. We do not own, inspect, or sell any vehicles. All transactions occur directly between buyers and sellers at their own risk.",
 };
 
-function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated, onOpenAdmin }) {  const [legalView, setLegalView] = useState(null);
+function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated, onOpenAdmin }) {
+  const [legalView, setLegalView] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -2718,6 +2750,7 @@ export default function App() {
   const [currentProfile, setCurrentProfile] = useState(null);
   const [threads, setThreads] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const [adminOpen, setAdminOpen] = useState(false);
   const [editingListing, setEditingListing] = useState(null);
@@ -2726,60 +2759,107 @@ export default function App() {
   const [signInGateOpen, setSignInGateOpen] = useState(false);
   const [signInGateAction, setSignInGateAction] = useState("");
 
+  const refreshProfile = async () => {
+    try {
+      setCurrentProfile(await getCurrentProfile());
+    } catch (e) {
+      console.error("refreshProfile:", e);
+    }
+  };
+
   // Initial load + auth listener
   useEffect(() => {
     (async () => {
-      const uid = await getCurrentUserId();
-      const [ls, sv, prof, th] = await Promise.all([
-        loadListings(),
-        loadSavedIds(),
-        uid ? getCurrentProfile() : Promise.resolve(null),
-        uid ? loadThreadsForUser(uid) : Promise.resolve([]),
-      ]);
-      setListings(ls);
-      setSavedIds(sv);
-      setCurrentUserId(uid);
-      setCurrentProfile(prof);
-      setThreads(th);
-      setLoaded(true);
+      try {
+        const uid = await getCurrentUserId();
+        const [ls, sv, prof, th] = await Promise.all([
+          loadListings().catch(e => { console.error("loadListings:", e); return []; }),
+          loadSavedIds().catch(e => { console.error("loadSavedIds:", e); return []; }),
+          uid ? getCurrentProfile().catch(e => { console.error("getCurrentProfile:", e); return null; }) : Promise.resolve(null),
+          uid ? loadThreadsForUser(uid).catch(e => { console.error("loadThreadsForUser:", e); return []; }) : Promise.resolve([]),
+        ]);
+        setListings(ls);
+        setSavedIds(sv);
+        setCurrentUserId(uid);
+        setCurrentProfile(prof);
+        setThreads(th);
+      } catch (err) {
+        console.error("Initial load failed:", err);
+        setLoadError(err.message || "Could not load data. Check your connection and try again.");
+      } finally {
+        setLoaded(true);
+      }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
-      const uid = await getCurrentUserId();
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const uid = session?.user?.id || null;
       setCurrentUserId(uid);
-      setCurrentProfile(uid ? await getCurrentProfile() : null);
-      setSavedIds(await loadSavedIds());
-      setThreads(uid ? await loadThreadsForUser(uid) : []);
+      if (!uid) {
+        setCurrentProfile(null);
+        setSavedIds([]);
+        setThreads([]);
+        return;
+      }
+      try {
+        const [prof, sv, th] = await Promise.all([
+          getCurrentProfile().catch(e => { console.error("getCurrentProfile:", e); return null; }),
+          loadSavedIds().catch(e => { console.error("loadSavedIds:", e); return []; }),
+          loadThreadsForUser(uid).catch(e => { console.error("loadThreadsForUser:", e); return []; }),
+        ]);
+        setCurrentProfile(prof);
+        setSavedIds(sv);
+        setThreads(th);
+      } catch (err) {
+        console.error("Auth-change load failed:", err);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Realtime: refresh threads when messages or threads change
+  /*
+  // Realtime: surgical updates (don't refetch all threads)
   useEffect(() => {
     if (!currentUserId) return;
 
-    const refresh = async () => {
-      setThreads(await loadThreadsForUser(currentUserId));
+    const handleMessageInsert = (payload) => {
+      const msg = payload.new;
+      if (!msg) return;
+      setThreads(prev => {
+        const updated = prev.map(t => {
+          if (t.id !== msg.thread_id) return t;
+          if (t.messages.some(m => m.id === msg.id)) return t;
+          const newMessages = [...t.messages, {
+            id: msg.id,
+            from: msg.sender_id,
+            text: msg.text,
+            at: new Date(msg.created_at).getTime(),
+            readBy: msg.read_by || [],
+          }];
+          const isUnread = msg.sender_id !== currentUserId && !(msg.read_by || []).includes(currentUserId);
+          const unreadFor = isUnread ? [currentUserId] : t.unreadFor;
+          return { ...t, messages: newMessages, updatedAt: Date.now(), unreadFor };
+        });
+        return updated.sort((a, b) => b.updatedAt - a.updatedAt);
+      });
+    };
+
+    const handleThreadInsert = async () => {
+      try {
+        setThreads(await loadThreadsForUser(currentUserId));
+      } catch (e) { console.error("thread refresh:", e); }
     };
 
     const channel = supabase
       .channel("realtime-messaging")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        refresh
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "threads" },
-        refresh
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, handleMessageInsert)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "threads" }, handleThreadInsert)
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [currentUserId]);
+  */
   
   const requireAuth = () => {
     if (currentUserId) return true;
@@ -2795,11 +2875,15 @@ export default function App() {
       return;
     }
     const wasSaved = savedIds.includes(id);
+    // Optimistic update
+    setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
     try {
       await apiToggleSaved(id, wasSaved);
-      setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
     } catch (e) {
-      alert("Could not save: " + e.message);
+      // Rollback on failure
+      setSavedIds(prev => wasSaved ? [...prev, id] : prev.filter(x => x !== id));
+      console.error("Save failed:", e);
+      alert("Could not save. Please try again.");
     }
   };
 
@@ -2841,11 +2925,19 @@ export default function App() {
   };
 
   const onSignOut = async () => {
-    await apiSignOut();
+    try {
+      await apiSignOut();
+    } catch (e) {
+      console.error("signOut:", e);
+    }
     setCurrentUserId(null);
     setCurrentProfile(null);
     setSavedIds([]);
     setThreads([]);
+    setEditingListing(null);
+    setAdminOpen(false);
+    setSelectedListing(null);
+    setSelectedThreadId(null);
     setTab("shop");
     setView("shop");
   };
@@ -2878,7 +2970,8 @@ export default function App() {
   };
 
   const onTabChange = (t) => {
-    setAdminOpen(false);setEditingListing(null);
+    setAdminOpen(false);
+    setEditingListing(null);
     if ((t === "sell" || t === "saved" || t === "messages") && !currentUserId) {
       setSignInGateAction(t === "sell" ? "post a listing" : t === "saved" ? "save listings" : "see your messages");
       setSignInGateOpen(true);
@@ -2908,6 +3001,21 @@ export default function App() {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
         <div className="text-neutral-400 text-sm">Loading…</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center px-8 text-center">
+        <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/40 flex items-center justify-center mb-4">
+          <X className="w-6 h-6 text-red-400" />
+        </div>
+        <h2 className="text-white text-lg font-semibold mb-2">Couldn't load the app</h2>
+        <p className="text-neutral-400 text-sm mb-6 max-w-xs">{loadError}</p>
+        <button onClick={() => window.location.reload()} className="px-6 h-11 rounded-full bg-emerald-700 text-white text-sm font-medium">
+          Try again
+        </button>
       </div>
     );
   }
@@ -2980,7 +3088,8 @@ export default function App() {
             onToggleSave={toggleSave} currentUserId={currentUserId} requireAuth={requireAuth}
             onBack={() => setView(tab === "saved" ? "saved" : tab === "more" ? "more" : tab === "dealer" ? "dealer" : "results")}
             onDelete={selectedListing.sellerId === currentUserId ? deleteListing : null}
-            onMessageSeller={startMessageSeller}onEdit={(l) => { setEditingListing(l); }} />
+            onMessageSeller={startMessageSeller}
+            onEdit={(l) => { setEditingListing(l); }} />
         )}
         {view === "sell" && (
           <SellScreen onCreate={createListing} currentUserId={currentUserId}
@@ -3010,18 +3119,16 @@ export default function App() {
           <ThreadScreen thread={activeThread} currentUserId={currentUserId}
             listing={activeThreadListing} onBack={() => setView("messages")} onSend={sendMessage} />
         )}
-{adminOpen && currentProfile?.is_admin && (
+        {view === "more" && adminOpen && currentProfile?.is_admin && (
           <AdminScreen onBack={() => setAdminOpen(false)} />
         )}
-{view === "more" && adminOpen && currentProfile?.is_admin && (
-  <AdminScreen onBack={() => setAdminOpen(false)} />
-)}
-{view === "more" && !adminOpen && (
-<MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
-  onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
-  onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
-  onProfileUpdated={async () => { setCurrentProfile(await getCurrentProfile()); }}
-  onOpenAdmin={() => setAdminOpen(true)} />)}
+        {view === "more" && !adminOpen && (
+          <MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}
+            onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
+            onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
+            onProfileUpdated={refreshProfile}
+            onOpenAdmin={() => setAdminOpen(true)} />
+        )}
 
         <AuthModal open={authModalOpen} mode={authMode} setMode={setAuthMode}
           onClose={() => setAuthModalOpen(false)} onSuccess={() => {}} />

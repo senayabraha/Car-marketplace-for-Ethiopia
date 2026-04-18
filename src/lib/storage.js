@@ -136,8 +136,9 @@ export async function getCurrentProfile() {
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single();
-  if (error) { console.error('getCurrentProfile:', error); return null; }
+    .maybeSingle();
+  if (error) { 
+    console.error('getCurrentProfile:', error); return null; }
   return data;
 }
 
