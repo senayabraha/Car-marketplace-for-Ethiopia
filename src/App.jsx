@@ -3077,7 +3077,7 @@ function BottomNav({ tab, setTab, unreadCount }) {
    ROOT APP
    ========================================================================= */
 
-export default function App() {
+function AppInner() {
   const [tab, setTab] = useState("shop");
   const [view, setView] = useState("shop");
   const [browseTab, setBrowseTab] = useState("make");
@@ -3254,17 +3254,16 @@ export default function App() {
       setSignInGateOpen(true);
       return;
     }
-    // BUG FIX: guard against in-flight duplicate calls (rapid taps / double-click)
     if (savingRef.current.has(id)) return;
     savingRef.current.add(id);
 
     const wasSaved = savedIds.includes(id);
-    setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
     try {
+      // Await FIRST, then update state — prevents UI flicker if API is slow or fails
       await apiToggleSaved(id, wasSaved);
+      setSavedIds(prev => wasSaved ? prev.filter(x => x !== id) : [...prev, id]);
       toast(wasSaved ? "Removed from saved" : "Listing saved!", "success");
     } catch (e) {
-      setSavedIds(prev => wasSaved ? [...prev, id] : prev.filter(x => x !== id));
       console.error("Save failed:", e);
       toast("Could not save. Please try again.", "error");
     } finally {
@@ -3472,7 +3471,6 @@ export default function App() {
   const activeThreadListing = activeThread ? listings.find(l => l.id === activeThread.listingId) : null;
 
   return (
-    <ToastProvider>
     <div className="min-h-screen bg-neutral-950 flex justify-center" style={{ fontFamily: "'Helvetica Neue', -apple-system, system-ui, sans-serif" }}>
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -3610,6 +3608,13 @@ export default function App() {
         <BottomNav tab={tab} setTab={onTabChange} unreadCount={unreadCount} />
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
     </ToastProvider>
   );
 }
