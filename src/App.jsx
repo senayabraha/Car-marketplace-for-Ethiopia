@@ -1280,6 +1280,33 @@ function TrimsScreen({ make, model, onBack, onPickTrim }) {
   );
 }
 
+function FeaturedListings({ listings, onOpen, savedIds, onToggleSave }) {
+  const scrollRef = React.useRef(null);
+  const scroll = (dir) => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir === "left" ? -scrollRef.current.offsetWidth * 0.7 : scrollRef.current.offsetWidth * 0.7, behavior: "smooth" });
+  };
+  if (!listings || listings.length === 0) return null;
+  return (
+    <div className="px-4 mt-4 mb-2">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-white text-lg font-semibold">Featured</h2>
+        <div className="flex gap-2">
+          <button onClick={() => scroll("left")} className="p-1.5 bg-neutral-800 rounded-full"><ChevronLeft className="w-4 h-4 text-white" /></button>
+          <button onClick={() => scroll("right")} className="p-1.5 bg-neutral-800 rounded-full"><ChevronRight className="w-4 h-4 text-white" /></button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-3 overflow-x-auto scroll-smooth no-scrollbar">
+        {listings.map(l => (
+          <div key={l.id} className="min-w-[72%] scale-90 origin-left">
+            <ListingCard listing={l} onOpen={onOpen} saved={savedIds.includes(l.id)} onToggleSave={onToggleSave} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* =========================================================================
    SCREEN: RESULTS
    ========================================================================= */
@@ -1294,6 +1321,8 @@ function ResultsScreen({ listings, query, filters, setFilters, sortMode, setSort
     const filtered = listings.filter(l => matchesFilter(l, filters, query));
     return sortListings(filtered, sortMode);
   }, [listings, query, filters, sortMode]);
+
+  const featuredListings = useMemo(() => listings.filter(l => l.featured), [listings]);
 
   const label = query || filters.bodyStyle ||
     (filters.make && filters.model && filters.trim ? `${filters.make} ${filters.model} ${filters.trim}` :
@@ -1340,6 +1369,7 @@ function ResultsScreen({ listings, query, filters, setFilters, sortMode, setSort
         <FilterChip onClick={() => onOpenFilters("Drivetrain")} active={!!filters.drivetrain}>Drivetrain</FilterChip>
         <FilterChip onClick={() => onOpenFilters("Fuel type")} active={!!filters.fuelType}>Fuel</FilterChip>
       </div>
+      <FeaturedListings listings={featuredListings} onOpen={onOpen} savedIds={savedIds} onToggleSave={onToggleSave} />
       <div className="mt-4 px-4 space-y-4">
         {loading ? (
           <ListingGridSkeleton count={4} />
@@ -2855,7 +2885,7 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
    SCREEN: ADMIN DASHBOARD
    ========================================================================= */
 
-function AdminScreen({ onBack }) {
+function AdminScreen({ onBack, onListingsChanged }) {
   const [tab, setTab] = useState("stats");
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
@@ -3027,10 +3057,22 @@ function AdminScreen({ onBack }) {
                   {" "}{new Date(l.createdAt).toLocaleDateString()}
                 </div>
               </div>
-              <button onClick={() => handleDeleteListing(l.id)}
-                className="w-9 h-9 rounded-lg border border-red-800 flex items-center justify-center">
-                <Trash2 className="w-4 h-4 text-red-400" />
-              </button>
+              <div className="flex flex-col items-center gap-2">
+                <label className="flex flex-col items-center gap-0.5 cursor-pointer">
+                  <input type="checkbox" checked={l.featured || false}
+                    onChange={async () => {
+                      await supabase.from("listings").update({ featured: !l.featured }).eq("id", l.id);
+                      setListings(prev => prev.map(x => x.id === l.id ? { ...x, featured: !x.featured } : x));
+                      if (onListingsChanged) onListingsChanged();
+                    }}
+                    className="accent-emerald-500 w-4 h-4" />
+                  <span className="text-[9px] text-neutral-400">Feature</span>
+                </label>
+                <button onClick={() => handleDeleteListing(l.id)}
+                  className="w-9 h-9 rounded-lg border border-red-800 flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-red-400" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -3578,6 +3620,12 @@ function AppInner() {
             onQuickSearch={(q) => goToResults(q)}
             onApplyLocation={(loc) => goToResults("", loc)}
           />
+          <FeaturedListings
+            listings={listings.filter(l => l.featured)}
+            onOpen={openDetail}
+            savedIds={savedIds}
+            onToggleSave={toggleSave}
+          />
           </div>
         )}
         {view === "browse" && (
@@ -3667,7 +3715,7 @@ function AppInner() {
             listing={activeThreadListing} onBack={() => setView("messages")} onSend={sendMessage} />
         )}
         {view === "more" && adminOpen && currentProfile?.is_admin && (
-          <AdminScreen onBack={() => setAdminOpen(false)} />
+          <AdminScreen onBack={() => setAdminOpen(false)} onListingsChanged={async () => setListings(await loadListings())} />
         )}
         {view === "more" && !adminOpen && (
           <MoreScreen currentUserId={currentUserId} currentProfile={currentProfile}

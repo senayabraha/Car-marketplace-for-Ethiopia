@@ -217,6 +217,7 @@ function rowToListing(r) {
     sellerPhone: seller.phone || '',
     sellerEmail: seller.email || '',
     dealer: seller.role === 'dealer',
+    featured: r.featured || false,
   };
 }
 
