@@ -940,6 +940,7 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [accountType, setAccountType] = useState("standard");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [resetSent, setResetSent] = useState(false);
@@ -958,7 +959,7 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
         return;
       }
       if (mode === "signup") {
-        await signUpWithEmail(email.trim(), password, { name: name.trim(), phone: phone.trim() });
+        await signUpWithEmail(email.trim(), password, { name: name.trim(), phone: phone.trim(), accountType });
         await signInWithEmail(email.trim(), password);
       } else {
         await signInWithEmail(email.trim(), password);
@@ -1010,6 +1011,14 @@ function AuthModal({ open, mode, setMode, onClose, onSuccess }) {
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                     className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white"
                     placeholder="+251 91 234 5678" />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400 mb-1 block">Account type</label>
+                  <select value={accountType} onChange={(e) => setAccountType(e.target.value)}
+                    className="w-full h-11 bg-neutral-900 border border-neutral-800 rounded-xl px-3 text-white">
+                    <option value="standard">Standard</option>
+                    <option value="dealer">Dealer</option>
+                  </select>
                 </div>
               </>
             )}
@@ -1778,7 +1787,7 @@ function EditListingScreen({ listing, onSave, onCancel }) {
   );
 }
 
-function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessageSeller, currentUserId, requireAuth, onEdit }) {
+function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessageSeller, currentUserId, currentProfile, requireAuth, onEdit }) {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [showReport, setShowReport] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
@@ -1786,6 +1795,7 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
   const photos = listing.photos || [];
   const hasPhotos = photos.length > 0;
   const isOwner = currentUserId && listing.sellerId === currentUserId;
+  const isAdmin = currentProfile?.is_admin === true;
 
   const nextPhoto = () => { if (photoIdx < photos.length - 1) setPhotoIdx(photoIdx + 1); };
   const prevPhoto = () => { if (photoIdx > 0) setPhotoIdx(photoIdx - 1); };
@@ -1939,9 +1949,20 @@ function DetailScreen({ listing, onBack, saved, onToggleSave, onDelete, onMessag
               <div className="text-neutral-400 text-xs">{listing.dealer ? "Dealer" : "Private seller"}</div>
             </div>
           </div>
+          {isAdmin && (
+            <div className="mt-3 px-1 space-y-0.5">
+              <p className="text-xs text-neutral-400">User: {listing.sellerName}</p>
+              <p className="text-xs text-neutral-400">ID: {listing.sellerId}</p>
+            </div>
+          )}
           {!isOwner && (
             <button onClick={() => { if (requireAuth()) onMessageSeller(listing); }} className="mt-4 w-full h-12 rounded-full bg-emerald-700 text-white font-medium flex items-center justify-center gap-2">
               <MessageCircle className="w-4 h-4" /> Message seller
+            </button>
+          )}
+          {isAdmin && !isOwner && (
+            <button onClick={() => onMessageSeller(listing)} className="mt-2 w-full h-10 rounded-lg bg-blue-600 text-white text-sm font-medium flex items-center justify-center gap-2">
+              <MessageCircle className="w-4 h-4" /> Message Seller (Admin)
             </button>
           )}
           {listing.sellerPhone && !isOwner && (
@@ -2633,7 +2654,7 @@ const LEGAL_TEXT = {
   disclaimer: "DISCLAIMER\n\nThis platform is a listings service only. We do not own, inspect, or sell any vehicles. All transactions occur directly between buyers and sellers at their own risk.",
 };
 
-function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated, onOpenAdmin }) {
+function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myListings, onOpenListing, onProfileUpdated, onOpenAdmin, onNavigate }) {
   const [legalView, setLegalView] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -2754,6 +2775,34 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
               </div>
             </div>
           )}
+          {(() => {
+            const canBeDealer = myListings.length >= 5;
+            const dealerActive = currentProfile?.dealer_active ?? false;
+            return (
+              <div className="mx-4 mb-3 p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 text-white text-sm font-medium">Dealer Account</label>
+                  <input
+                    type="checkbox"
+                    disabled={!canBeDealer}
+                    checked={dealerActive}
+                    onChange={async (e) => {
+                      if (e.target.checked) alert("You must verify your address within 30 days.");
+                      await apiUpdateProfile({
+                        dealerActive: e.target.checked,
+                        dealerActivatedAt: e.target.checked ? new Date().toISOString() : null,
+                      });
+                      if (onProfileUpdated) onProfileUpdated();
+                    }}
+                    className="w-5 h-5 accent-emerald-500"
+                  />
+                </div>
+                {!canBeDealer && (
+                  <p className="text-xs text-neutral-400">You need at least 5 listings to activate dealer mode. ({myListings.length}/5)</p>
+                )}
+              </div>
+            );
+          })()}
         </>
       ) : (
         <Row icon={UserCircle2} label="Sign in / Register" onClick={onSignIn} />
@@ -2780,6 +2829,9 @@ function MoreScreen({ currentUserId, currentProfile, onSignIn, onSignOut, myList
           <div className="px-5 py-2 text-xs tracking-wider text-neutral-500 uppercase bg-neutral-900/40">Admin</div>
           <Row icon={Shield} label="Admin Dashboard" onClick={onOpenAdmin} />
         </>
+      )}
+      {currentUserId && (
+        <Row icon={Car} label="My Listings" onClick={() => onNavigate("myListings")} />
       )}
       <Row icon={FileText} label="Terms of Service" onClick={() => setLegalView("terms")} />
       <Row icon={FileText} label="Privacy Policy" onClick={() => setLegalView("privacy")} />
@@ -3043,6 +3095,36 @@ function AdminScreen({ onBack }) {
   );
 }
 
+function MyListingsScreen({ listings, userId, onOpen, onBack }) {
+  const myListings = listings.filter(l => l.sellerId === userId);
+  return (
+    <div className="pb-28">
+      <div className="flex items-center gap-3 px-4 pt-5 pb-3">
+        <button onClick={onBack} className="w-9 h-9 rounded-full border border-neutral-800 flex items-center justify-center">
+          <ChevronLeft className="w-5 h-5 text-white" />
+        </button>
+        <h2 className="text-white text-lg font-semibold">My Listings</h2>
+      </div>
+      <div className="px-4 space-y-4">
+        {myListings.length === 0 ? (
+          <p className="text-neutral-400 pt-4">You have no listings yet.</p>
+        ) : (
+          myListings.map(l => (
+            <button key={l.id} onClick={() => onOpen(l)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-neutral-900 border border-neutral-800 active:bg-neutral-800">
+              <CarPhoto seed={l.imageSeed || 1} src={getMainPhoto(l)} className="w-16 h-12 rounded-md" />
+              <div className="flex-1 text-left min-w-0">
+                <div className="text-white text-sm font-medium truncate">{l.year} {l.make} {l.model}</div>
+                <div className="text-neutral-400 text-xs">{formatMoney(l.price, l.currency)}</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-neutral-500" />
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BottomNav({ tab, setTab, unreadCount }) {
   const items = [
     { key: "shop", label: "Shop", Icon: Car },
@@ -3050,7 +3132,7 @@ function BottomNav({ tab, setTab, unreadCount }) {
     { key: "dealer", label: "At Dealer", Icon: Store },
     { key: "messages", label: "Messages", Icon: MessageCircle, badge: unreadCount },
     { key: "sell", label: "Sell", Icon: Tag },
-    { key: "more", label: "More", Icon: Menu },
+    { key: "more", label: "ACCOUNT", Icon: UserCircle2 },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-neutral-950 border-t border-neutral-900 z-30">
@@ -3542,7 +3624,7 @@ function AppInner() {
         
         {view === "detail" && selectedListing && !editingListing && (
           <DetailScreen listing={selectedListing} saved={savedIds.includes(selectedListing.id)}
-            onToggleSave={toggleSave} currentUserId={currentUserId} requireAuth={requireAuth}
+            onToggleSave={toggleSave} currentUserId={currentUserId} currentProfile={currentProfile} requireAuth={requireAuth}
             onBack={() => setView(tab === "saved" ? "saved" : tab === "more" ? "more" : tab === "dealer" ? "dealer" : "results")}
             onDelete={selectedListing.sellerId === currentUserId ? deleteListing : null}
             onMessageSeller={startMessageSeller}
@@ -3592,7 +3674,11 @@ function AppInner() {
             onSignIn={() => { setAuthMode("signin"); setAuthModalOpen(true); }}
             onSignOut={onSignOut} myListings={myListings} onOpenListing={openDetail}
             onProfileUpdated={refreshProfile}
-            onOpenAdmin={() => setAdminOpen(true)} />
+            onOpenAdmin={() => setAdminOpen(true)}
+            onNavigate={setView} />
+        )}
+        {view === "myListings" && (
+          <MyListingsScreen listings={listings} userId={currentUserId} onOpen={openDetail} onBack={() => setView("more")} />
         )}
 
         <AuthModal open={authModalOpen} mode={authMode} setMode={setAuthMode}

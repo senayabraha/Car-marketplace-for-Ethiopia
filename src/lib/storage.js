@@ -124,6 +124,7 @@ export async function signUpWithEmail(email, password, profileData = {}) {
       name: profileData.name?.trim() || email.split('@')[0],
       phone: profileData.phone || null,
       role: 'buyer', // everyone starts as buyer; can upgrade later
+      account_type: profileData.accountType || 'standard',
     });
     if (profileError) {
       console.error('Profile creation failed:', profileError);
@@ -270,6 +271,9 @@ export async function updateProfile(updates) {
   if (updates.businessName !== undefined) snakeUpdates.business_name = updates.businessName;
   if (updates.role !== undefined) snakeUpdates.role = updates.role;
   if (updates.telegram !== undefined) snakeUpdates.telegram = updates.telegram;
+  if (updates.accountType !== undefined) snakeUpdates.account_type = updates.accountType;
+  if (updates.dealerActive !== undefined) snakeUpdates.dealer_active = updates.dealerActive;
+  if (updates.dealerActivatedAt !== undefined) snakeUpdates.dealer_activated_at = updates.dealerActivatedAt;
   snakeUpdates.updated_at = new Date().toISOString();
   const { error } = await supabase.from("profiles").update(snakeUpdates).eq("id", userId);
   if (error) throw error;
