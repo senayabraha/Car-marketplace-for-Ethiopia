@@ -1296,9 +1296,9 @@ function FeaturedListings({ listings, onOpen, savedIds, onToggleSave }) {
           <button onClick={() => scroll("right")} className="p-1.5 bg-neutral-800 rounded-full"><ChevronRight className="w-4 h-4 text-white" /></button>
         </div>
       </div>
-      <div ref={scrollRef} className="flex gap-3 overflow-x-auto scroll-smooth no-scrollbar">
+      <div ref={scrollRef} className="flex gap-1 overflow-x-auto scroll-smooth no-scrollbar">
         {listings.map(l => (
-          <div key={l.id} className="min-w-[72%] scale-90 origin-left">
+          <div key={l.id} className="min-w-[49%] shrink-0">
             <ListingCard listing={l} onOpen={onOpen} saved={savedIds.includes(l.id)} onToggleSave={onToggleSave} />
           </div>
         ))}
