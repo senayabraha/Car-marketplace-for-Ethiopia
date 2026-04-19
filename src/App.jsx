@@ -3037,7 +3037,7 @@ function AdminScreen({ onBack, onListingsChanged }) {
           {listings.length === 0 ? (
             <div className="text-center text-neutral-500 mt-10">No listings yet.</div>
           ) : listings.map(l => (
-            <div key={l.id} className="px-5 py-3 border-b border-neutral-900 flex items-center gap-3">
+            <div key={l.id} className={`px-5 py-3 border-b flex items-center gap-3 ${l.featured ? "border-amber-500/30 bg-amber-500/5" : "border-neutral-900"}`}>
               <div className="w-14 h-10 rounded-md overflow-hidden bg-neutral-800 shrink-0">
                 {l.photos && l.photos[0] ? (
                   <img src={l.photos[0]} alt="" className="w-full h-full object-cover" />
@@ -3046,7 +3046,10 @@ function AdminScreen({ onBack, onListingsChanged }) {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-white text-sm font-medium truncate">{l.year} {l.make} {l.model}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white text-sm font-medium truncate">{l.year} {l.make} {l.model}</span>
+                  {l.featured && <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">★ Featured</span>}
+                </div>
                 <div className="text-neutral-400 text-xs truncate">
                   {l.currency} {l.price?.toLocaleString()} · {l.location || l.city || l.country || "—"}
                 </div>
@@ -3058,16 +3061,15 @@ function AdminScreen({ onBack, onListingsChanged }) {
                 </div>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <label className="flex flex-col items-center gap-0.5 cursor-pointer">
-                  <input type="checkbox" checked={l.featured || false}
-                    onChange={async () => {
-                      await supabase.from("listings").update({ featured: !l.featured }).eq("id", l.id);
-                      setListings(prev => prev.map(x => x.id === l.id ? { ...x, featured: !x.featured } : x));
-                      if (onListingsChanged) onListingsChanged();
-                    }}
-                    className="accent-emerald-500 w-4 h-4" />
-                  <span className="text-[9px] text-neutral-400">Feature</span>
-                </label>
+                <button
+                  onClick={async () => {
+                    await supabase.from("listings").update({ featured: !l.featured }).eq("id", l.id);
+                    setListings(prev => prev.map(x => x.id === l.id ? { ...x, featured: !x.featured } : x));
+                    if (onListingsChanged) onListingsChanged();
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold border ${l.featured ? "bg-amber-500/20 border-amber-500/40 text-amber-400" : "bg-neutral-800 border-neutral-700 text-neutral-400"}`}>
+                  {l.featured ? "★ Unfeature" : "☆ Feature"}
+                </button>
                 <button onClick={() => handleDeleteListing(l.id)}
                   className="w-9 h-9 rounded-lg border border-red-800 flex items-center justify-center">
                   <Trash2 className="w-4 h-4 text-red-400" />
